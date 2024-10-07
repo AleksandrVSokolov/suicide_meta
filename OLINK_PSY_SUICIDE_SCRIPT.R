@@ -3192,6 +3192,136 @@ for (i in 1:nrow(meta_with_covar_prefrontal_signif)){
   dev.off()
   
 }
+################### Volcano plot for every meta-analysis ###################
+
+plot_meta_volcano = function(meta_df, figure_path, title){
+  
+  meta_df = meta_df[!is.na(meta_df$meta_pval),]
+  meta_df$adj.P.Val = p.adjust(meta_df$meta_pval, method = "fdr")
+  
+  Pval_treshold = meta_df[meta_df$adj.P.Val < 0.05,]
+  Pval_treshold = max(Pval_treshold$meta_pval)
+  Pval_treshold = -log10(Pval_treshold)
+  if (is.na(Pval_treshold)){
+    Pval_treshold = -log10(0.001)
+  }
+  PREFIX_logFC_threshold = 0.2
+  
+  meta_df$is.highlight = sapply(meta_df$meta_LFc, function(x){
+    if (x > PREFIX_logFC_threshold){
+      x = "Up"
+    } else if (x < - PREFIX_logFC_threshold){
+      x = "Down"
+    } else {
+      x = "None"
+    }
+  })
+  meta_df = mutate(meta_df, is_annotate = ifelse(-log10(meta_pval) >= -log10(0.05) & is.highlight != "None", "yes", "no"))
+  
+  # Make the plot
+  plot = ggplot(meta_df, aes(x=meta_LFc, y=-log10(meta_pval))) +
+    
+    # Show all points
+    geom_point(aes(color= factor(is.highlight, levels = c("None", "Down", "Up"))), alpha=0.6, size=4) +
+    scale_color_manual(values = c("grey", "skyblue", "red")) 
+  
+  # Add standard scale for plot
+  plot = plot + scale_x_continuous(limits = c(-1.5,1.5))
+  plot = plot + scale_y_continuous(limits = c(0,5))
+  
+  # Add title
+  plot = plot + ggtitle(label = title)
+  
+  # Add pval line
+  if (!is.null(Pval_treshold)){
+    plot = plot + geom_hline(yintercept=Pval_treshold, linetype="dashed", 
+                             color = "red", size=0.5)
+  }
+  
+  # Add pval line 0.05
+  plot = plot + geom_hline(yintercept= -log10(0.05), linetype="dashed", 
+                           color = "blue", size=0.5)
+  # Add logFC lines
+  if (min(meta_df$meta_LFc) < -PREFIX_logFC_threshold){
+    plot = plot + geom_vline(xintercept= -PREFIX_logFC_threshold, linetype="dashed", 
+                             color = "grey", size=0.5)
+  }
+  
+  if (max(meta_df$meta_LFc) > PREFIX_logFC_threshold){
+    plot = plot + geom_vline(xintercept= PREFIX_logFC_threshold, linetype="dashed", 
+                             color = "grey", size=0.5)
+  }
+  
+  # Add label using ggrepel to avoid overlapping
+  if (any(meta_df$is_annotate == "yes")){
+    plot = plot + 
+      geom_label_repel(data=subset(meta_df, is_annotate=="yes"), aes(label=gene), size=4, force = 10, 
+                       max.overlaps = 50)
+  } 
+  
+  plot = plot +
+    labs(x = "meta-estimated Log2FC", y = "-log10 p-value") +
+    # Custom the theme:
+    theme( 
+      legend.position="none",
+      panel.border = element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_line(size = 0.1, linetype = 2, color =  "black"), # Modifying horizontal lines in the plot
+      panel.background = element_blank(),
+      plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      axis.title.x = element_text(size = 14, face = "bold"),
+      axis.title.y = element_text(size = 14, face = "bold")
+    )
+  ggsave(file = figure_path, plot = plot, width=2560, height=1440, units = "px", scale = 2)
+}
+
+# making volcanos in a loop
+joined_list_all_metas = list(
+  meta_no_covar_all_brain,
+  meta_no_covar_cortical,
+  meta_no_covar_prefrontal,
+  meta_with_covar_all_brain,
+  meta_with_covar_cortical,
+  meta_with_covar_prefrontal
+)
+names_for_list_all = c("All brain", "Cortical", "DLPFC", "All brain (covar)", "Cortical (covar)", "DLPFC (covar)")
+dir.create("volcano_plots")
+
+for (i in 1:6){
+  
+  curr_df = joined_list_all_metas[[i]]
+  plot_path = paste0("volcano_plots/", names_for_list_all[i], ".png")
+  plot_meta_volcano(curr_df, figure_path = plot_path, title = names_for_list_all[i])
+  
+}
+
+images_in_folder = list.files("volcano_plots", full.names = TRUE)
+image_list  =  lapply(images_in_folder, png::readPNG)
+image_grobs = lapply(image_list, grid::rasterGrob)
+combined_file_name = paste0("Figure_S1_Volcano_combined_image.png")
+height = nrow(image_list[[1]])
+width = ncol(image_list[[1]])
+
+spacer = rectGrob(gp=gpar(col=NA, fill=NA))
+image_grobs_modif = list(
+  
+  image_grobs[[1]], image_grobs[[2]],
+  spacer, spacer,
+  image_grobs[[3]], image_grobs[[4]], 
+  spacer, spacer,
+  image_grobs[[5]], image_grobs[[6]]
+)
+
+row_heights = unit(c(1, 3, 1, 3, 1),   # Heights for each row
+                    c("null", "inches", "null", "inches", "null"))
+
+# generating PNG
+png(filename = combined_file_name, units = "px", width = width*2, height = height*3)
+grid::grid.newpage()
+gridExtra::grid.arrange(grobs = image_grobs_modif, ncol = 2, heights = row_heights)
+dev.off()
 
 
 ################### Sensitivity analysis ###################
@@ -4319,7 +4449,7 @@ make_Venn_digram_list(named_list = meta_gene_list_overlaps_covar, palette = 7, p
 ################### Network visualization for meta ###################
 joined_list = c(meta_list_no_covar_signif, meta_list_with_covar_signif)
 joined_list = lapply(joined_list, function(x){
-  x = x[abs(x$meta_LFc) > 0.2,]
+  x = x[abs(x$meta_LFc) >= 0.2,]
   return(x)
 })
 
@@ -4479,7 +4609,7 @@ saveWorkbook(wb, "Enrichment_BP.xlsx", overwrite = TRUE)
 # resaving some images as PNG
 library("animation")
 im.convert("Enrichment_folder/DLPFC_GO_BP_bar.pdf", convert = "convert",output = "DLPFC_GO_BP_bar.png", extra.opts="-density 300x300 -units pixelsperinch ")
-
+im.convert("Enrichment_folder/DLPFC_GO_CC_bar.pdf", convert = "convert",output = "DLPFC_GO_CC_bar.png", extra.opts="-density 300x300 -units pixelsperinch ")
 
 ################### AI-based classification and stats ###################
 joined_list_significant = c(meta_list_no_covar_signif, meta_list_with_covar_signif)
