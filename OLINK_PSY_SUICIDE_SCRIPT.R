@@ -2082,6 +2082,104 @@ combined_df_cell_types_meta = combined_df_cell_types %>%
 combined_df_cell_types_meta = ungroup(combined_df_cell_types_meta)
 combined_df_cell_types_meta = as.data.frame(combined_df_cell_types_meta)
 
+################### Cohort stats on individual datasets ###################
+length(unique(combined_df_no_covar$Study))
+length(unique(combined_df_wth_covar$Study))
+
+studies = unique(combined_df_no_covar$Study)
+
+cohort_stats_vector_no_covariates = vector()
+for (i in 1:length(studies)){
+  
+  separator_large = "\n\n"
+  if (i == 1){
+    
+    string_1 = paste0("Total associations without covariates: ", nrow(combined_df_no_covar))
+    string_2 = paste0("Total significant associations (nominal) without covariates: ", nrow(combined_df_no_covar[combined_df_no_covar$P.Value<0.05,]))
+    string_3 = paste0("Average effect size (log2FC) without covariates: ", mean(combined_df_no_covar$logFC))
+    string_4 = paste0("Average effect size (log2FC) (nominal significance) without covariates: ", mean(combined_df_no_covar[combined_df_no_covar$P.Value<0.05,"logFC"]))
+    cohort_stats_vector_no_covariates = c(string_1, string_2, string_3,  string_4, separator_large)
+  }
+  
+  TMP_current_cohort = studies[i]
+  TMP_current_dataset = combined_df_no_covar[combined_df_no_covar$Study == TMP_current_cohort,]
+  TMP_study_type = unique(TMP_current_dataset$Tissue_type)
+  TMP_tech_type = unique(TMP_current_dataset$Technology)
+  
+  main_header = paste(c(TMP_current_cohort, TMP_study_type, TMP_tech_type), collapse = "\t")
+  
+  aggregated_stats = TMP_current_dataset %>%
+    group_by(.,Tissue) %>%
+    summarise(
+      total_associations = length(ID),
+      unique_gene_symbols_p_lt_0_05 = n_distinct(Gene_symbol[P.Value < 0.05]),
+      unique_IDs_p_lt_0_05 = n_distinct(ID[P.Value < 0.05]),
+      unique_gene_symbols_adj_p_lt_0_05 = n_distinct(Gene_symbol[adj.P.Val < 0.05]),
+      unique_IDs_adj_p_lt_0_05 = n_distinct(ID[adj.P.Val < 0.05]),
+      mean_log2FC = mean(logFC),
+      mean_log2FC_nomin_signif = mean(logFC[P.Value < 0.05])
+    )
+  aggregated_stats = as.data.frame(aggregated_stats)
+  header = paste(colnames(aggregated_stats), collapse = "\t")
+  # char_aggregated_stats = apply(aggregated_stats, 1, function(x) paste(x, collapse = "\t"))
+  
+  char_aggregated_stats = knitr::kable(aggregated_stats)
+  
+  cohort_stats_vector_no_covariates = c(cohort_stats_vector_no_covariates, main_header, char_aggregated_stats, separator_large)
+  if (i == length(studies)){
+    cohort_stats_vector_no_covariates = c(cohort_stats_vector_no_covariates, separator_large)
+  }
+  
+  
+}
+writeLines(text = cohort_stats_vector_no_covariates, con = "individual_DE_stats_no_covar.txt")
+
+cohort_stats_vector_with_covariates = vector()
+for (i in 1:length(studies)){
+  
+  separator_large = "\n\n"
+  if (i == 1){
+    
+    string_1 = paste0("Total associations with covariates: ", nrow(combined_df_wth_covar))
+    string_2 = paste0("Total significant associations (nominal) with covariates: ", nrow(combined_df_wth_covar[combined_df_wth_covar$P.Value<0.05,]))
+    string_3 = paste0("Average effect size (log2FC) with covariates: ", mean(combined_df_wth_covar$logFC))
+    string_4 = paste0("Average effect size (log2FC) (nominal significance) with covariates: ", mean(combined_df_wth_covar[combined_df_wth_covar$P.Value<0.05,"logFC"]))
+    cohort_stats_vector_with_covariates = c(string_1, string_2, string_3,  string_4, separator_large)
+  }
+  
+  TMP_current_cohort = studies[i]
+  TMP_current_dataset = combined_df_wth_covar[combined_df_wth_covar$Study == TMP_current_cohort,]
+  TMP_study_type = unique(TMP_current_dataset$Tissue_type)
+  TMP_tech_type = unique(TMP_current_dataset$Technology)
+  
+  main_header = paste(c(TMP_current_cohort, TMP_study_type, TMP_tech_type), collapse = "\t")
+  
+  aggregated_stats = TMP_current_dataset %>%
+    group_by(.,Tissue) %>%
+    summarise(
+      total_associations = length(ID),
+      unique_gene_symbols_p_lt_0_05 = n_distinct(Gene_symbol[P.Value < 0.05]),
+      unique_IDs_p_lt_0_05 = n_distinct(ID[P.Value < 0.05]),
+      unique_gene_symbols_adj_p_lt_0_05 = n_distinct(Gene_symbol[adj.P.Val < 0.05]),
+      unique_IDs_adj_p_lt_0_05 = n_distinct(ID[adj.P.Val < 0.05]),
+      mean_log2FC = mean(logFC),
+      mean_log2FC_nomin_signif = mean(logFC[P.Value < 0.05])
+    )
+  aggregated_stats = as.data.frame(aggregated_stats)
+  header = paste(colnames(aggregated_stats), collapse = "\t")
+  # char_aggregated_stats = apply(aggregated_stats, 1, function(x) paste(x, collapse = "\t"))
+  
+  char_aggregated_stats = knitr::kable(aggregated_stats)
+  
+  cohort_stats_vector_with_covariates = c(cohort_stats_vector_with_covariates, main_header, char_aggregated_stats, separator_large)
+  
+  if (i == length(studies)){
+    cohort_stats_vector_with_covariates = c(cohort_stats_vector_with_covariates, separator_large)
+  }
+}
+writeLines(text = cohort_stats_vector_with_covariates, con = "individual_DE_stats_with_covar.txt")
+
+
 ################### Cohort inspection for specificity ###################
 table(combined_df_no_covar$Tissue, combined_df_no_covar$Study)
 
