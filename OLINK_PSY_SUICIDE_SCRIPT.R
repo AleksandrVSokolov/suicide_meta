@@ -2095,9 +2095,9 @@ for (i in 1:length(studies)){
   if (i == 1){
     
     string_1 = paste0("Total associations without covariates: ", nrow(combined_df_no_covar))
-    string_2 = paste0("Total significant associations (nominal) without covariates: ", nrow(combined_df_no_covar[combined_df_no_covar$P.Value<0.05,]))
+    string_2 = paste0("Total significant associations (nominal) without covariates: ", nrow(combined_df_no_covar[combined_df_no_covar$P.Value<=0.05,]))
     string_3 = paste0("Average effect size (log2FC) without covariates: ", mean(combined_df_no_covar$logFC))
-    string_4 = paste0("Average effect size (log2FC) (nominal significance) without covariates: ", mean(combined_df_no_covar[combined_df_no_covar$P.Value<0.05,"logFC"]))
+    string_4 = paste0("Average effect size (log2FC) (nominal significance) without covariates: ", mean(combined_df_no_covar[combined_df_no_covar$P.Value<=0.05,"logFC"]))
     cohort_stats_vector_no_covariates = c(string_1, string_2, string_3,  string_4, separator_large)
   }
   
@@ -2112,12 +2112,12 @@ for (i in 1:length(studies)){
     group_by(.,Tissue) %>%
     summarise(
       total_associations = length(ID),
-      unique_gene_symbols_p_lt_0_05 = n_distinct(Gene_symbol[P.Value < 0.05]),
-      unique_IDs_p_lt_0_05 = n_distinct(ID[P.Value < 0.05]),
-      unique_gene_symbols_adj_p_lt_0_05 = n_distinct(Gene_symbol[adj.P.Val < 0.05]),
-      unique_IDs_adj_p_lt_0_05 = n_distinct(ID[adj.P.Val < 0.05]),
+      unique_gene_symbols_p_lt_0_05 = n_distinct(Gene_symbol[P.Value <= 0.05]),
+      unique_IDs_p_lt_0_05 = n_distinct(ID[P.Value <= 0.05]),
+      unique_gene_symbols_adj_p_lt_0_05 = n_distinct(Gene_symbol[adj.P.Val <= 0.05]),
+      unique_IDs_adj_p_lt_0_05 = n_distinct(ID[adj.P.Val <= 0.05]),
       mean_log2FC = mean(logFC),
-      mean_log2FC_nomin_signif = mean(logFC[P.Value < 0.05])
+      mean_log2FC_nomin_signif = mean(logFC[P.Value <= 0.05])
     )
   aggregated_stats = as.data.frame(aggregated_stats)
   header = paste(colnames(aggregated_stats), collapse = "\t")
