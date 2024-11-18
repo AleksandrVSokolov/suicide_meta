@@ -2096,8 +2096,8 @@ for (i in 1:length(studies)){
     
     string_1 = paste0("Total associations without covariates: ", nrow(combined_df_no_covar))
     string_2 = paste0("Total significant associations (nominal) without covariates: ", nrow(combined_df_no_covar[combined_df_no_covar$P.Value<=0.05,]))
-    string_3 = paste0("Average effect size (log2FC) without covariates: ", mean(combined_df_no_covar$logFC))
-    string_4 = paste0("Average effect size (log2FC) (nominal significance) without covariates: ", mean(combined_df_no_covar[combined_df_no_covar$P.Value<=0.05,"logFC"]))
+    string_3 = paste0("Average absolute effect size (log2FC) without covariates: ", mean(abs(combined_df_no_covar$logFC)))
+    string_4 = paste0("Average absolute effect size (log2FC) (nominal significance) without covariates: ", mean(abs(combined_df_no_covar[combined_df_no_covar$P.Value<=0.05,"logFC"])))
     cohort_stats_vector_no_covariates = c(string_1, string_2, string_3,  string_4, separator_large)
   }
   
@@ -2116,8 +2116,8 @@ for (i in 1:length(studies)){
       unique_IDs_p_lt_0_05 = n_distinct(ID[P.Value <= 0.05]),
       unique_gene_symbols_adj_p_lt_0_05 = n_distinct(Gene_symbol[adj.P.Val <= 0.05]),
       unique_IDs_adj_p_lt_0_05 = n_distinct(ID[adj.P.Val <= 0.05]),
-      mean_log2FC = mean(logFC),
-      mean_log2FC_nomin_signif = mean(logFC[P.Value <= 0.05])
+      mean_abs_log2FC = mean(abs(logFC)),
+      mean_abs_log2FC_nomin_signif = mean(abs(logFC[P.Value <= 0.05]))
     )
   aggregated_stats = as.data.frame(aggregated_stats)
   header = paste(colnames(aggregated_stats), collapse = "\t")
@@ -2142,8 +2142,8 @@ for (i in 1:length(studies)){
     
     string_1 = paste0("Total associations with covariates: ", nrow(combined_df_wth_covar))
     string_2 = paste0("Total significant associations (nominal) with covariates: ", nrow(combined_df_wth_covar[combined_df_wth_covar$P.Value<0.05,]))
-    string_3 = paste0("Average effect size (log2FC) with covariates: ", mean(combined_df_wth_covar$logFC))
-    string_4 = paste0("Average effect size (log2FC) (nominal significance) with covariates: ", mean(combined_df_wth_covar[combined_df_wth_covar$P.Value<0.05,"logFC"]))
+    string_3 = paste0("Average absolute effect size (log2FC) with covariates: ", mean(abs(combined_df_wth_covar$logFC)))
+    string_4 = paste0("Average absolute effect size (log2FC) (nominal significance) with covariates: ", mean(abs(combined_df_wth_covar[combined_df_wth_covar$P.Value<0.05,"logFC"])))
     cohort_stats_vector_with_covariates = c(string_1, string_2, string_3,  string_4, separator_large)
   }
   
@@ -2162,8 +2162,8 @@ for (i in 1:length(studies)){
       unique_IDs_p_lt_0_05 = n_distinct(ID[P.Value < 0.05]),
       unique_gene_symbols_adj_p_lt_0_05 = n_distinct(Gene_symbol[adj.P.Val < 0.05]),
       unique_IDs_adj_p_lt_0_05 = n_distinct(ID[adj.P.Val < 0.05]),
-      mean_log2FC = mean(logFC),
-      mean_log2FC_nomin_signif = mean(logFC[P.Value < 0.05])
+      mean_abs_log2FC = mean(abs(logFC)),
+      mean_abs_log2FC_nomin_signif = mean(abs(logFC[P.Value < 0.05]))
     )
   aggregated_stats = as.data.frame(aggregated_stats)
   header = paste(colnames(aggregated_stats), collapse = "\t")
