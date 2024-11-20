@@ -4515,6 +4515,104 @@ blood_df_no_covar[blood_df_no_covar$Corrected_symbol %in% suas_genes_PSY,]
 blood_df_with_covar[blood_df_with_covar$Corrected_symbol %in% suas_genes_PSY,]
 # None are validated in full analyses and in blood
 
+################### Stats on matching with blood ###################
+
+meta_list_signif_combined = list(
+  "meta_no_covar_all_brain_signif" = meta_no_covar_all_brain_signif,
+  "meta_no_covar_cortical_signif" = meta_no_covar_cortical_signif,
+  "meta_no_covar_prefrontal_signif" = meta_no_covar_prefrontal_signif,
+  "meta_with_covar_all_brain_signif" = meta_with_covar_all_brain_signif,
+  "meta_with_covar_cortical_signif" = meta_with_covar_cortical_signif,
+  "meta_with_covar_prefrontal_signif" = meta_with_covar_prefrontal_signif
+)
+
+tabulate_variable = function(factor_var, useNA = "always"){
+  
+  # Calculate counts for each level
+  counts = table(factor_var,  useNA = useNA)
+  
+  # Calculate percentages
+  percentages = round((counts / sum(counts)) * 100, 2)
+  
+  # Create the result as counts with percentages in parentheses
+  result = paste0(counts, " (", percentages, "%)")
+  
+  # Name the results with factor levels
+  names(result) = names(counts)
+  
+  result = paste0(names(result), ": ", result)
+  
+  result = paste0(result, collapse = "\n")
+  
+  return(result)
+}
+
+compare_with_blood = function(dataset, name){
+  
+  Data_name = name
+  Blood_dir = paste0("Blood direction (probe-level): \n", tabulate_variable(dataset$blood_dir))
+  Blood_signif = paste0("Blood significance (probe-level): \n", tabulate_variable(dataset$blood_signif))
+  Matching_brain_blood = paste0("Directional match brain and blood (only for analyzed genes): \n", tabulate_variable(dataset$matching_with_blood, useNA="no"))
+  
+  Matched_genes = dataset[dataset$matching_with_blood == "Match",]
+  Matched_genes = Matched_genes$gene
+  Matched_genes = Matched_genes[!is.na(Matched_genes)]
+  Matched_genes = paste0(Matched_genes, collapse = ";")
+  Matched_genes = paste0("Matched genes: ", Matched_genes)
+  
+  Matched_genes_blood_signif = dataset[dataset$matching_with_blood == "Match", ]
+  Matched_genes_blood_signif = dataset[dataset$blood_signif == "significant",]
+  Matched_genes_blood_signif = Matched_genes_blood_signif$gene
+  Matched_genes_blood_signif = Matched_genes_blood_signif[!is.na(Matched_genes_blood_signif)]
+  Matched_genes_blood_signif = paste0(Matched_genes_blood_signif, collapse = ";")
+  Matched_genes_blood_signif = paste0("Matched genes (signif in blood): ", Matched_genes_blood_signif)
+  
+  Mismatched_genes = dataset[dataset$matching_with_blood == "Mismatch",]
+  Mismatched_genes = Mismatched_genes$gene
+  Mismatched_genes = Mismatched_genes[!is.na(Mismatched_genes)]
+  Mismatched_genes = paste0(Mismatched_genes, collapse = ";")
+  Mismatched_genes = paste0("Mismatched genes: ", Mismatched_genes)
+  
+  separator_small = "\n\n"
+  separator_large = "\n\n\n\n"
+  output = c(Data_name, 
+             separator_small,
+             Blood_dir,
+             separator_small,
+             Blood_signif,
+             separator_small,
+             Matching_brain_blood,
+             separator_small,
+             Matched_genes,
+             separator_small,
+             Matched_genes_blood_signif,
+             separator_small,
+             Mismatched_genes,
+             separator_large)
+  output = paste0(output, collapse = "")
+  return(output)
+}
+
+names_for_list = c(
+  "All brain",
+  "Cortical regions",
+  "DLPFC",
+  "All brain (covar)",
+  "Cortical regions (covar)",
+  "DLPFC (covar)"
+)
+
+Stats_matching_brain_blood_meta = vector()
+
+for (i in 1:length(meta_list_signif_combined)){
+  
+  message = compare_with_blood(meta_list_signif_combined[[i]], names_for_list[i])
+  Stats_matching_brain_blood_meta = c(Stats_matching_brain_blood_meta, message)
+  
+}
+writeLines(text = Stats_matching_brain_blood_meta, con = "Stats_matching_brain_blood_meta.txt")
+
+
 ################### Venn diagrams ###################
 # Without covariates
 meta_gene_list_overlaps = lapply(meta_list_no_covar_signif, function(x){
