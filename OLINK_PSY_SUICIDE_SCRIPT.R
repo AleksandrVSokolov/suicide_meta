@@ -4561,7 +4561,7 @@ compare_with_blood = function(dataset, name){
   Matched_genes = paste0("Matched genes: ", Matched_genes)
   
   Matched_genes_blood_signif = dataset[dataset$matching_with_blood == "Match", ]
-  Matched_genes_blood_signif = dataset[dataset$blood_signif == "significant",]
+  Matched_genes_blood_signif = Matched_genes_blood_signif[Matched_genes_blood_signif$blood_signif == "significant",]
   Matched_genes_blood_signif = Matched_genes_blood_signif$gene
   Matched_genes_blood_signif = Matched_genes_blood_signif[!is.na(Matched_genes_blood_signif)]
   Matched_genes_blood_signif = paste0(Matched_genes_blood_signif, collapse = ";")
