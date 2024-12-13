@@ -1804,7 +1804,7 @@ table(geo_test_pheno$`group:ch1`)
 # GSE213982 is good
 
 ## GSE144136
-# GSE144136 is single cell -> skipped as difficult to compare to bulk
+# GSE144136 is single cell -> skipped for now as difficult to compare to bulk
 
 ## GSE248260
 geo_test = getGEO("GSE248260")
@@ -1872,6 +1872,21 @@ table(geo_test_pheno$organism_ch1)  # 12 homo sapiens
 # GSE66937
 # GSE102556
 # GSE92538
+
+
+#### Inspection of datasets from https://www.sciencedirect.com/science/article/pii/S0022395621000480?via%3Dihub (post-analysis)
+# GSE21138 - no clear evidence for suicide in samples on GEO, paper has potentially matchable variables in the supplement https://www.sciencedirect.com/science/article/pii/S0006899308019410?via%3Dihub#app1
+# GSE92538 - used by us
+# GSE53987 - no clear evidence for suicide in samples on GEO, paper has NO variables (only grouped): https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0121744#pone-0121744-t001
+# GSE54567 - no clear evidence for suicide in samples on GEO, paper does not show variables (shared https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0090980)
+# GSE54568 - no clear evidence for suicide in samples on GEO, paper does not show variables (shared https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0090980)
+# GSE5388 - used by us
+# GSE5389 - used by us
+# GSE54570 - no clear evidence for suicide in samples on GEO, paper does not show variables (shared https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0090980)
+# SMRI 2 and SMRI 7 were not available as www.stanleyresearch.org was not responsive
+
+# Conclusion -> GSE21138 could be theoretically useful due to 13 suicide cases however does not fit inclusion protocol based on GEO search
+# Other datasets have no readily availbable infromation on suicide or already used by us
 
 ################### Importing DE summary stats ###################
 summary_paths_no_covar = list.files(path = "Data_preprocessing_analysis", recursive = TRUE, full.names = TRUE)
@@ -2369,6 +2384,26 @@ meta_no_covar_all_brain = do.call(rbind, meta_no_covar_all_brain)
 rownames(meta_no_covar_all_brain) = NULL
 rm(list = ls(pattern = "tmp_"))
 meta_no_covar_all_brain = dplyr::arrange(meta_no_covar_all_brain, meta_pval)
+meta_no_covar_all_brain$meta_FDR = p.adjust(meta_no_covar_all_brain$meta_pval, method = "fdr")
+meta_no_covar_all_brain = meta_no_covar_all_brain[,c("gene",
+                                                     "detected_cohorts",
+                                                     "cohorts_up",
+                                                     "cohorts_down",
+                                                     "commentary",
+                                                     "meta_LFc",
+                                                     "meta_se",
+                                                     "meta_pval",
+                                                     "meta_FDR",
+                                                     "tau2",
+                                                     "I2",
+                                                     "H2" ,
+                                                     "Q",
+                                                     "Q.p",
+                                                     "mean_blood_lfc",
+                                                     "blood_dir",
+                                                     "blood_signif",
+                                                     "matching_with_blood")]
+
 meta_no_covar_all_brain_signif = meta_no_covar_all_brain[meta_no_covar_all_brain$meta_pval < 0.05,]
 meta_no_covar_all_brain_signif = meta_no_covar_all_brain_signif[!is.na(meta_no_covar_all_brain_signif$meta_pval),]
 nrow(meta_no_covar_all_brain_signif)
@@ -2550,7 +2585,28 @@ meta_with_covar_all_brain = do.call(rbind, meta_with_covar_all_brain)
 rownames(meta_with_covar_all_brain) = NULL
 rm(list = ls(pattern = "tmp_"))
 meta_with_covar_all_brain = dplyr::arrange(meta_with_covar_all_brain, meta_pval)
+meta_with_covar_all_brain$meta_FDR = p.adjust(meta_with_covar_all_brain$meta_pval, method = "fdr")
+meta_with_covar_all_brain = meta_with_covar_all_brain[,c("gene",
+                                                     "detected_cohorts",
+                                                     "cohorts_up",
+                                                     "cohorts_down",
+                                                     "commentary",
+                                                     "meta_LFc",
+                                                     "meta_se",
+                                                     "meta_pval",
+                                                     "meta_FDR",
+                                                     "tau2",
+                                                     "I2",
+                                                     "H2" ,
+                                                     "Q",
+                                                     "Q.p",
+                                                     "mean_blood_lfc",
+                                                     "blood_dir",
+                                                     "blood_signif",
+                                                     "matching_with_blood")]
+
 meta_with_covar_all_brain_signif = meta_with_covar_all_brain[meta_with_covar_all_brain$meta_pval < 0.05,]
+
 meta_with_covar_all_brain_signif = meta_with_covar_all_brain_signif[!is.na(meta_with_covar_all_brain_signif$meta_pval),]
 nrow(meta_with_covar_all_brain_signif)
 
@@ -2559,7 +2615,8 @@ plot_forest_meta_gene(gene_name = "P2RY12", meta_df = combined_df_with_covar_met
 
 # Overlap full analysis
 overlapping_genes_meta_full = intersect(meta_no_covar_all_brain_signif$gene, meta_with_covar_all_brain_signif$gene)
-overlapping_genes_meta_full = unique(overlapping_genes_meta_full) # 56 genes overlap
+overlapping_genes_meta_full = unique(overlapping_genes_meta_full) 
+length(overlapping_genes_meta_full) # 57 genes overlap
 
 # making plots
 dir.create("forest_plots")
@@ -2736,6 +2793,26 @@ meta_no_covar_cortical = do.call(rbind, meta_no_covar_cortical)
 rownames(meta_no_covar_cortical) = NULL
 rm(list = ls(pattern = "tmp_"))
 meta_no_covar_cortical = dplyr::arrange(meta_no_covar_cortical, meta_pval)
+meta_no_covar_cortical$meta_FDR = p.adjust(meta_no_covar_cortical$meta_pval, method = "fdr")
+meta_no_covar_cortical = meta_no_covar_cortical[,c("gene",
+                                                   "detected_cohorts",
+                                                   "cohorts_up",
+                                                   "cohorts_down",
+                                                   "commentary",
+                                                   "meta_LFc",
+                                                   "meta_se",
+                                                   "meta_pval",
+                                                   "meta_FDR",
+                                                   "tau2",
+                                                   "I2",
+                                                   "H2" ,
+                                                   "Q",
+                                                   "Q.p",
+                                                   "mean_blood_lfc",
+                                                   "blood_dir",
+                                                   "blood_signif",
+                                                   "matching_with_blood")]
+
 meta_no_covar_cortical_signif = meta_no_covar_cortical[meta_no_covar_cortical$meta_pval < 0.05,]
 meta_no_covar_cortical_signif = meta_no_covar_cortical_signif[!is.na(meta_no_covar_cortical_signif$meta_pval),]
 meta_no_covar_cortical[meta_no_covar_cortical$gene == "P2RY12",]
@@ -2916,10 +2993,28 @@ meta_with_covar_cortical = do.call(rbind, meta_with_covar_cortical)
 rownames(meta_with_covar_cortical) = NULL
 rm(list = ls(pattern = "tmp_"))
 meta_with_covar_cortical = dplyr::arrange(meta_with_covar_cortical, meta_pval)
+meta_with_covar_cortical$meta_FDR = p.adjust(meta_with_covar_cortical$meta_pval, method = "fdr")
+meta_with_covar_cortical = meta_with_covar_cortical[,c("gene",
+                                                         "detected_cohorts",
+                                                         "cohorts_up",
+                                                         "cohorts_down",
+                                                         "commentary",
+                                                         "meta_LFc",
+                                                         "meta_se",
+                                                         "meta_pval",
+                                                         "meta_FDR",
+                                                         "tau2",
+                                                         "I2",
+                                                         "H2" ,
+                                                         "Q",
+                                                         "Q.p",
+                                                         "mean_blood_lfc",
+                                                         "blood_dir",
+                                                         "blood_signif",
+                                                         "matching_with_blood")]
 meta_with_covar_cortical_signif = meta_with_covar_cortical[meta_with_covar_cortical$meta_pval < 0.05,]
 meta_with_covar_cortical_signif = meta_with_covar_cortical_signif[!is.na(meta_with_covar_cortical_signif$meta_pval),]
-nrow(meta_with_covar_cortical_signif)
-# 163
+nrow(meta_with_covar_cortical_signif) # 205
 meta_with_covar_cortical[meta_with_covar_cortical$gene == "P2RY12",]
 
 # making plots
@@ -3094,6 +3189,26 @@ meta_no_covar_prefrontal = do.call(rbind, meta_no_covar_prefrontal)
 rownames(meta_no_covar_prefrontal) = NULL
 rm(list = ls(pattern = "tmp_"))
 meta_no_covar_prefrontal = dplyr::arrange(meta_no_covar_prefrontal, meta_pval)
+meta_no_covar_prefrontal$meta_FDR = p.adjust(meta_no_covar_prefrontal$meta_pval, method = "fdr")
+meta_no_covar_prefrontal = meta_no_covar_prefrontal[,c("gene",
+                                                       "detected_cohorts",
+                                                       "cohorts_up",
+                                                       "cohorts_down",
+                                                       "commentary",
+                                                       "meta_LFc",
+                                                       "meta_se",
+                                                       "meta_pval",
+                                                       "meta_FDR",
+                                                       "tau2",
+                                                       "I2",
+                                                       "H2" ,
+                                                       "Q",
+                                                       "Q.p",
+                                                       "mean_blood_lfc",
+                                                       "blood_dir",
+                                                       "blood_signif",
+                                                       "matching_with_blood")]
+
 meta_no_covar_prefrontal_signif = meta_no_covar_prefrontal[meta_no_covar_prefrontal$meta_pval < 0.05,]
 meta_no_covar_prefrontal_signif = meta_no_covar_prefrontal_signif[!is.na(meta_no_covar_prefrontal_signif$meta_pval),]
 nrow(meta_no_covar_prefrontal_signif)
@@ -3269,6 +3384,27 @@ meta_with_covar_prefrontal = do.call(rbind, meta_with_covar_prefrontal)
 rownames(meta_with_covar_prefrontal) = NULL
 rm(list = ls(pattern = "tmp_"))
 meta_with_covar_prefrontal = dplyr::arrange(meta_with_covar_prefrontal, meta_pval)
+meta_with_covar_prefrontal$meta_FDR = p.adjust(meta_with_covar_prefrontal$meta_pval, method = "fdr")
+meta_with_covar_prefrontal = meta_with_covar_prefrontal[,c("gene",
+                                                         "detected_cohorts",
+                                                         "cohorts_up",
+                                                         "cohorts_down",
+                                                         "commentary",
+                                                         "meta_LFc",
+                                                         "meta_se",
+                                                         "meta_pval",
+                                                         "meta_FDR",
+                                                         "tau2",
+                                                         "I2",
+                                                         "H2" ,
+                                                         "Q",
+                                                         "Q.p",
+                                                         "mean_blood_lfc",
+                                                         "blood_dir",
+                                                         "blood_signif",
+                                                         "matching_with_blood")]
+
+
 meta_with_covar_prefrontal_signif = meta_with_covar_prefrontal[meta_with_covar_prefrontal$meta_pval < 0.05,]
 meta_with_covar_prefrontal_signif = meta_with_covar_prefrontal_signif[!is.na(meta_with_covar_prefrontal_signif$meta_pval),]
 nrow(meta_with_covar_prefrontal_signif)
@@ -3581,6 +3717,26 @@ REML_meta_no_covar_all_brain = do.call(rbind, REML_meta_no_covar_all_brain)
 rownames(REML_meta_no_covar_all_brain) = NULL
 rm(list = ls(pattern = "tmp_"))
 REML_meta_no_covar_all_brain = dplyr::arrange(REML_meta_no_covar_all_brain, meta_pval)
+REML_meta_no_covar_all_brain$meta_FDR = p.adjust(REML_meta_no_covar_all_brain$meta_pval, method = "fdr")
+REML_meta_no_covar_all_brain = REML_meta_no_covar_all_brain[,c("gene",
+                                                         "detected_cohorts",
+                                                         "cohorts_up",
+                                                         "cohorts_down",
+                                                         "commentary",
+                                                         "meta_LFc",
+                                                         "meta_se",
+                                                         "meta_pval",
+                                                         "meta_FDR",
+                                                         "tau2",
+                                                         "I2",
+                                                         "H2" ,
+                                                         "Q",
+                                                         "Q.p",
+                                                         "mean_blood_lfc",
+                                                         "blood_dir",
+                                                         "blood_signif",
+                                                         "matching_with_blood")]
+
 REML_meta_no_covar_all_brain_signif = REML_meta_no_covar_all_brain[REML_meta_no_covar_all_brain$meta_pval < 0.05,]
 REML_meta_no_covar_all_brain_signif = REML_meta_no_covar_all_brain_signif[!is.na(REML_meta_no_covar_all_brain_signif$meta_pval),]
 nrow(REML_meta_no_covar_all_brain_signif)
@@ -3740,6 +3896,26 @@ REML_meta_with_covar_all_brain = do.call(rbind, REML_meta_with_covar_all_brain)
 rownames(REML_meta_with_covar_all_brain) = NULL
 rm(list = ls(pattern = "tmp_"))
 REML_meta_with_covar_all_brain = dplyr::arrange(REML_meta_with_covar_all_brain, meta_pval)
+REML_meta_with_covar_all_brain$meta_FDR = p.adjust(REML_meta_with_covar_all_brain$meta_pval, method = "fdr")
+REML_meta_with_covar_all_brain = REML_meta_with_covar_all_brain[,c("gene",
+                                                         "detected_cohorts",
+                                                         "cohorts_up",
+                                                         "cohorts_down",
+                                                         "commentary",
+                                                         "meta_LFc",
+                                                         "meta_se",
+                                                         "meta_pval",
+                                                         "meta_FDR",
+                                                         "tau2",
+                                                         "I2",
+                                                         "H2" ,
+                                                         "Q",
+                                                         "Q.p",
+                                                         "mean_blood_lfc",
+                                                         "blood_dir",
+                                                         "blood_signif",
+                                                         "matching_with_blood")]
+
 REML_meta_with_covar_all_brain_signif = REML_meta_with_covar_all_brain[REML_meta_with_covar_all_brain$meta_pval < 0.05,]
 REML_meta_with_covar_all_brain_signif = REML_meta_with_covar_all_brain_signif[!is.na(REML_meta_with_covar_all_brain_signif$meta_pval),]
 nrow(REML_meta_with_covar_all_brain_signif)
@@ -3908,6 +4084,26 @@ REML_meta_no_covar_cortical = do.call(rbind, REML_meta_no_covar_cortical)
 rownames(REML_meta_no_covar_cortical) = NULL
 rm(list = ls(pattern = "tmp_"))
 REML_meta_no_covar_cortical = dplyr::arrange(REML_meta_no_covar_cortical, meta_pval)
+REML_meta_no_covar_cortical$meta_FDR = p.adjust(REML_meta_no_covar_cortical$meta_pval, method = "fdr")
+REML_meta_no_covar_cortical = REML_meta_no_covar_cortical[,c("gene",
+                                                         "detected_cohorts",
+                                                         "cohorts_up",
+                                                         "cohorts_down",
+                                                         "commentary",
+                                                         "meta_LFc",
+                                                         "meta_se",
+                                                         "meta_pval",
+                                                         "meta_FDR",
+                                                         "tau2",
+                                                         "I2",
+                                                         "H2" ,
+                                                         "Q",
+                                                         "Q.p",
+                                                         "mean_blood_lfc",
+                                                         "blood_dir",
+                                                         "blood_signif",
+                                                         "matching_with_blood")]
+
 REML_meta_no_covar_cortical_signif = REML_meta_no_covar_cortical[REML_meta_no_covar_cortical$meta_pval < 0.05,]
 REML_meta_no_covar_cortical_signif = REML_meta_no_covar_cortical_signif[!is.na(REML_meta_no_covar_cortical_signif$meta_pval),]
 nrow(REML_meta_no_covar_cortical_signif)
@@ -4075,6 +4271,26 @@ REML_meta_with_covar_cortical = do.call(rbind, REML_meta_with_covar_cortical)
 rownames(REML_meta_with_covar_cortical) = NULL
 rm(list = ls(pattern = "tmp_"))
 REML_meta_with_covar_cortical = dplyr::arrange(REML_meta_with_covar_cortical, meta_pval)
+REML_meta_with_covar_cortical$meta_FDR = p.adjust(REML_meta_with_covar_cortical$meta_pval, method = "fdr")
+REML_meta_with_covar_cortical = REML_meta_with_covar_cortical[,c("gene",
+                                                         "detected_cohorts",
+                                                         "cohorts_up",
+                                                         "cohorts_down",
+                                                         "commentary",
+                                                         "meta_LFc",
+                                                         "meta_se",
+                                                         "meta_pval",
+                                                         "meta_FDR",
+                                                         "tau2",
+                                                         "I2",
+                                                         "H2" ,
+                                                         "Q",
+                                                         "Q.p",
+                                                         "mean_blood_lfc",
+                                                         "blood_dir",
+                                                         "blood_signif",
+                                                         "matching_with_blood")]
+
 REML_meta_with_covar_cortical_signif = REML_meta_with_covar_cortical[REML_meta_with_covar_cortical$meta_pval < 0.05,]
 REML_meta_with_covar_cortical_signif = REML_meta_with_covar_cortical_signif[!is.na(REML_meta_with_covar_cortical_signif$meta_pval),]
 nrow(REML_meta_with_covar_cortical_signif)
@@ -4238,6 +4454,25 @@ REML_meta_no_covar_prefrontal = do.call(rbind, REML_meta_no_covar_prefrontal)
 rownames(REML_meta_no_covar_prefrontal) = NULL
 rm(list = ls(pattern = "tmp_"))
 REML_meta_no_covar_prefrontal = dplyr::arrange(REML_meta_no_covar_prefrontal, meta_pval)
+REML_meta_no_covar_prefrontal$meta_FDR = p.adjust(REML_meta_no_covar_prefrontal$meta_pval, method = "fdr")
+REML_meta_no_covar_prefrontal = REML_meta_no_covar_prefrontal[,c("gene",
+                                                         "detected_cohorts",
+                                                         "cohorts_up",
+                                                         "cohorts_down",
+                                                         "commentary",
+                                                         "meta_LFc",
+                                                         "meta_se",
+                                                         "meta_pval",
+                                                         "meta_FDR",
+                                                         "tau2",
+                                                         "I2",
+                                                         "H2" ,
+                                                         "Q",
+                                                         "Q.p",
+                                                         "mean_blood_lfc",
+                                                         "blood_dir",
+                                                         "blood_signif",
+                                                         "matching_with_blood")]
 REML_meta_no_covar_prefrontal_signif = REML_meta_no_covar_prefrontal[REML_meta_no_covar_prefrontal$meta_pval < 0.05,]
 REML_meta_no_covar_prefrontal_signif = REML_meta_no_covar_prefrontal_signif[!is.na(REML_meta_no_covar_prefrontal_signif$meta_pval),]
 nrow(REML_meta_no_covar_prefrontal_signif)
@@ -4401,6 +4636,25 @@ REML_meta_with_covar_prefrontal = do.call(rbind, REML_meta_with_covar_prefrontal
 rownames(REML_meta_with_covar_prefrontal) = NULL
 rm(list = ls(pattern = "tmp_"))
 REML_meta_with_covar_prefrontal = dplyr::arrange(REML_meta_with_covar_prefrontal, meta_pval)
+REML_meta_with_covar_prefrontal$meta_FDR = p.adjust(REML_meta_with_covar_prefrontal$meta_pval, method = "fdr")
+REML_meta_with_covar_prefrontal = REML_meta_with_covar_prefrontal[,c("gene",
+                                                         "detected_cohorts",
+                                                         "cohorts_up",
+                                                         "cohorts_down",
+                                                         "commentary",
+                                                         "meta_LFc",
+                                                         "meta_se",
+                                                         "meta_pval",
+                                                         "meta_FDR",
+                                                         "tau2",
+                                                         "I2",
+                                                         "H2" ,
+                                                         "Q",
+                                                         "Q.p",
+                                                         "mean_blood_lfc",
+                                                         "blood_dir",
+                                                         "blood_signif",
+                                                         "matching_with_blood")]
 REML_meta_with_covar_prefrontal_signif = REML_meta_with_covar_prefrontal[REML_meta_with_covar_prefrontal$meta_pval < 0.05,]
 REML_meta_with_covar_prefrontal_signif = REML_meta_with_covar_prefrontal_signif[!is.na(REML_meta_with_covar_prefrontal_signif$meta_pval),]
 nrow(REML_meta_with_covar_prefrontal_signif)
@@ -4880,7 +5134,7 @@ colnames(GPT01_classification) = c("Gene", "GPT01_class")
 GPT01_classification = as.data.frame(GPT01_classification)
 GPT01_classification$Gene = str_trim(GPT01_classification$Gene)
 GPT01_classification$GPT01_class = str_trim(GPT01_classification$GPT01_class)
-table(unique_significant_genes %in% GPT01_classification$Gene) # TRUE 1399
+table(unique_significant_genes %in% GPT01_classification$Gene) # TRUE 1403
 GPT01_classification = GPT01_classification[GPT01_classification$Gene != "",]
 
 # Extra mapping
@@ -4973,3 +5227,25 @@ for (i in 1:6) {
 }
 
 saveWorkbook(wb, "Meta_suicide_significant_genes.xlsx", overwrite = TRUE)
+
+################### Saving full files ###################
+joined_list_meta_all_data = c(meta_list_no_covar, meta_list_with_covar)
+names_for_list = c(
+  "All brain",
+  "Cortical regions",
+  "DLPFC",
+  "All brain (covar)",
+  "Cortical regions (covar)",
+  "DLPFC (covar)"
+)
+names(joined_list_meta_all_data)
+
+dir.create("full_meta_results")
+
+for (i in 1:6) {
+  
+  path_to_save = paste0("full_meta_results/",names_for_list[i], ".csv")
+  
+  # Save data as CSV
+  write.csv(joined_list_meta_all_data[[i]], file = path_to_save, row.names = FALSE)
+}
