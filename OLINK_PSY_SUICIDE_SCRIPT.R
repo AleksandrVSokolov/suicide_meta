@@ -5249,3 +5249,25 @@ for (i in 1:6) {
   # Save data as CSV
   write.csv(joined_list_meta_all_data[[i]], file = path_to_save, row.names = FALSE)
 }
+
+################### Inspection of some genes ###################
+# BDNF
+lapply(joined_list_meta_all_data, function(x) x[x$gene == "BDNF",])
+plot_forest_meta_gene(gene_name = "BDNF", meta_df = combined_df_no_covar_meta_full_list_reduced)
+plot_forest_meta_gene(gene_name = "BDNF", meta_df = combined_df_no_covar_meta_cortical_list_reduced)
+plot_forest_meta_gene(gene_name = "BDNF", meta_df = combined_df_no_covar_meta_prefrontal_list_reduced)
+
+plot_forest_meta_gene(gene_name = "BDNF", meta_df = combined_df_with_covar_meta_full_list_reduced)
+plot_forest_meta_gene(gene_name = "BDNF", meta_df = combined_df_with_covar_meta_cortical_list_reduced)
+plot_forest_meta_gene(gene_name = "BDNF", meta_df = combined_df_with_covar_meta_prefrontal_list_reduced)
+
+# VEGF
+lapply(joined_list_meta_all_data, function(x) x[x$gene == "VEGFA",])
+plot_forest_meta_gene(gene_name = "VEGFA", meta_df = combined_df_no_covar_meta_full_list_reduced)
+plot_forest_meta_gene(gene_name = "VEGFA", meta_df = combined_df_no_covar_meta_cortical_list_reduced)
+plot_forest_meta_gene(gene_name = "VEGFA", meta_df = combined_df_no_covar_meta_prefrontal_list_reduced)
+
+plot_forest_meta_gene(gene_name = "VEGFA", meta_df = combined_df_with_covar_meta_full_list_reduced)
+plot_forest_meta_gene(gene_name = "VEGFA", meta_df = combined_df_with_covar_meta_cortical_list_reduced)
+plot_forest_meta_gene(gene_name = "VEGFA", meta_df = combined_df_with_covar_meta_prefrontal_list_reduced)
+
