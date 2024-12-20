@@ -4866,6 +4866,28 @@ for (i in 1:length(meta_list_signif_combined)){
 }
 writeLines(text = Stats_matching_brain_blood_meta, con = "Stats_matching_brain_blood_meta.txt")
 
+# Figure
+
+blood_cor_plot = ggplot(data = meta_no_covar_all_brain, aes(x = meta_LFc, y = mean_blood_lfc)) +
+  geom_point(alpha = .5, col = "#8B0000", size = 2) +
+  labs(x = "meta-estimated Log2FC (all brain)", y = "average Log2FC in GSE247998 (blood)") +
+  # Custom the theme:
+  theme( 
+    legend.position="none",
+    panel.border = element_blank(),
+    panel.grid.major.x = element_line(size = 0.1, linetype = 2, color =  "black"),
+    panel.grid.major.y = element_line(size = 0.1, linetype = 2, color =  "black"),
+    axis.line = element_line(size = 1, linetype = 1, color =  "black"),
+    panel.background = element_blank(),
+    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+    axis.text.x = element_text(size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_text(size = 14, face = "bold"),
+    axis.title.y = element_text(size = 14, face = "bold")
+  )
+
+ggsave(file = "Fig_S2.png", plot = blood_cor_plot, width=2560, height=1440, units = "px", scale = 1)
+nrow(meta_no_covar_all_brain) - 32651 # 15717 transcripts plotted
 
 ################### Venn diagrams ###################
 # Without covariates
