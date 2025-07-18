@@ -294,7 +294,14 @@ geo_data_table_gsm_extract = function(GEO_ID){
   Full_GSMS = lapply(GSMS, function(x) x@dataTable@table)
   Full_Columns = lapply(GSMS, function(x) x@dataTable@columns)
   Full_Columns = Full_Columns[[1]]
-  Full_GSMS = do.call(cbind, Full_GSMS)
+  
+  row_numbers = sapply(Full_GSMS, nrow)
+  
+  if (length(unique(row_numbers)) == 1){
+    Full_GSMS = do.call(cbind, Full_GSMS)
+  } else {
+    writeLines("Number of rows does not match between samples! Returning a list of GSMS")
+  }
   Output = list()
   Output[[1]] = Full_Columns
   Output[[2]] = Full_GSMS
@@ -760,6 +767,46 @@ GSE208338_Top_table_no_covar$Tissue_type = "Brain"
 GSE208338_Top_table_no_covar$Technology = "Array"
 
 write.csv(GSE208338_Top_table_no_covar, "GSE208338_results/GSE208338_Top_table_no_covar.csv")
+
+#### Surrogate variable analysis and DE (no covariates)
+# We need to decide how many SVs to use in every dataset.
+# Maybe NSVs = min(NSVs, 5)
+# Calculate the number of surrogate variables
+model_matrix_SV_GSE208338 = model.matrix(~ SUICIDE, data = GSE208338_pheno_curated)
+num_SV_GSE208338 = sva::num.sv(expression_GSE208338, model_matrix_SV_GSE208338, method = "leek") # Suggested 1
+
+# Select number of surrogate variables
+num_SV_selected_GSE208338 = min(c(num_SV_GSE208338, 5))
+
+# Obtain surrogate variables as covariates
+mod0_GSE208338 = model.matrix(~1,data=GSE208338_pheno_curated)
+svobj_GSE208338 = sva(expression_GSE208338, 
+                      model_matrix_SV_GSE208338,
+                      mod0_GSE208338, 
+                      n.sv=num_SV_selected_GSE208338)
+sv_df_GSE208338 = svobj_GSE208338$sv
+model_matrix_SV_full_GSE208338 = cbind(model_matrix_SV_GSE208338, sv_df_GSE208338)
+
+# Differential expression
+fit = lmFit(expression_GSE208338, model_matrix_SV_full_GSE208338)
+fitE = eBayes(fit)
+GSE208338_Top_table_SV = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+GSE208338_Top_table_SV$ID = rownames(GSE208338_Top_table_SV)
+# *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+
+SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+SE = SE[,2]
+SE = SE[GSE208338_Top_table_SV$ID]
+GSE208338_Top_table_SV$SE = SE
+
+# Annotating results
+GSE208338_probes = GSE208338_probes[GSE208338_Top_table_SV$ID, ]
+GSE208338_Top_table_SV$Gene_symbol = GSE208338_probes$Gene_symbol
+GSE208338_Top_table_SV$Gene_symbol_non_hgnc = GSE208338_probes$Gene_symbol_non_hgnc
+GSE208338_Top_table_SV$Tissue = GSE208338_pheno_curated$TISSUE[1]
+GSE208338_Top_table_SV$Tissue_type = "Brain"
+GSE208338_Top_table_SV$Technology = "Array"
+write.csv(GSE208338_Top_table_SV, "GSE208338_results/GSE208338_Top_table_SV.csv")
 rm(list = ls(pattern = "GSE208338"))
 gc()
 
@@ -994,12 +1041,51 @@ GSE5388_Top_table$Tissue_type = "Brain"
 GSE5388_Top_table$Technology = "Array"
 
 # Saving outputs
+GSE5388_expression_values = exprs(GSE5388_expression)
+
 dir.create("GSE5388_results")
-write.csv(GSE5388_expression, "GSE5388_results/GSE5388_expression.csv")
+write.csv(GSE5388_expression_values, "GSE5388_results/GSE5388_expression.csv")
 write.csv(GSE5388_probes, "GSE5388_results/GSE5388_probes.csv")
 write.csv(GSE5388_pheno_curated_2, "GSE5388_results/GSE5388_pheno_curated.csv") # "GSM123186" "GSM123189" are excluded (phenotypes); GSM123233 is excluded (degradation)
 write.csv(GSE5388_Top_table_no_covar, "GSE5388_results/GSE5388_Top_table_no_covar.csv")
 write.csv(GSE5388_Top_table, "GSE5388_results/GSE5388_Top_table.csv")
+
+#### Surrogate variable analysis
+model_matrix_SV_GSE5388 = model.matrix(~ SUICIDE, data = GSE5388_pheno_curated_2)
+num_SV_GSE5388 = sva::num.sv(GSE5388_expression_values, model_matrix_SV_GSE5388, method = "leek") # Suggested 5
+num_SV_selected_GSE5388 = min(c(num_SV_GSE5388, 5))
+
+# Obtain surrogate variables as covariates
+mod0_GSE5388 = model.matrix(~1,data=GSE5388_pheno_curated_2)
+svobj_GSE5388 = sva(GSE5388_expression_values, 
+                    model_matrix_SV_GSE5388,
+                    mod0_GSE5388, 
+                    n.sv=num_SV_selected_GSE5388)
+
+sv_df_GSE5388 = svobj_GSE5388$sv
+model_matrix_SV_full_GSE5388 = cbind(model_matrix_SV_GSE5388, sv_df_GSE5388)
+
+# Differential expression
+fit = lmFit(GSE5388_expression_values, model_matrix_SV_full_GSE5388)
+fitE = eBayes(fit)
+GSE5388_Top_table_SV = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+GSE5388_Top_table_SV$ID = rownames(GSE5388_Top_table_SV)
+# *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+
+SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+SE = SE[,2]
+SE = SE[GSE5388_Top_table_SV$ID]
+GSE5388_Top_table_SV$SE = SE
+
+# Annotating results
+GSE5388_probes = GSE5388_probes[GSE5388_Top_table_SV$ID, ]
+GSE5388_Top_table_SV$Gene_symbol = GSE5388_probes$Gene_symbol
+GSE5388_Top_table_SV$Gene_symbol_non_hgnc = GSE5388_probes$Gene_symbol_non_hgnc
+GSE5388_Top_table_SV$Tissue = GSE5388_pheno_curated$TISSUE[1]
+GSE5388_Top_table_SV$Tissue_type = "Brain"
+GSE5388_Top_table_SV$Technology = "Array"
+
+write.csv(GSE5388_Top_table_SV, "GSE5388_results/GSE5388_Top_table_SV.csv")
 rm(list = ls(pattern = "GSE5388"))
 gc()
 
@@ -1194,11 +1280,54 @@ GSE5389_Top_table$Technology = "Array"
 
 # Saving outputs
 dir.create("GSE5389_results")
-write.csv(GSE5389_expression, "GSE5389_results/GSE5389_expression.csv")
+GSE5389_expression_values = exprs(GSE5389_expression)
+write.csv(GSE5389_expression_values, "GSE5389_results/GSE5389_expression.csv")
 write.csv(GSE5389_probes, "GSE5389_results/GSE5389_probes.csv")
 write.csv(GSE5389_pheno_curated, "GSE5389_results/GSE5389_pheno_curated.csv")
 write.csv(GSE5389_Top_table_no_covar, "GSE5389_results/GSE5389_Top_table_no_covar.csv")
 write.csv(GSE5389_Top_table, "GSE5389_results/GSE5389_Top_table.csv")
+
+
+
+#### Surrogate variable analysis
+# Calculate the number of surrogate variables
+model_matrix_SV_GSE5389 = model.matrix(~ SUICIDE, data = GSE5389_pheno_curated)
+num_SV_GSE5389 = sva::num.sv(GSE5389_expression_values, model_matrix_SV_GSE5389, method = "leek")
+
+# Select number of surrogate variables
+num_SV_selected_GSE5389 = min(c(num_SV_GSE5389, 5)) # Suggested 0
+
+
+# Obtain surrogate variables as covariates
+mod0_GSE5389 = model.matrix(~1,data=GSE5389_pheno_curated)
+svobj_GSE5389 = sva(GSE5389_expression_values, 
+                      model_matrix_SV_GSE5389,
+                      mod0_GSE5389, 
+                      n.sv=num_SV_selected_GSE5389)
+sv_df_GSE5389 = svobj_GSE5389$sv
+model_matrix_SV_full_GSE5389 = cbind(model_matrix_SV_GSE5389, sv_df_GSE5389)
+
+# Differential expression (duplication as in "no-covariates" since num_SV_selected_GSE5389 is 0)
+fit = lmFit(GSE5389_expression_values, model_matrix_SV_full_GSE5389)
+fitE = eBayes(fit)
+GSE5389_Top_table_SV = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+GSE5389_Top_table_SV$ID = rownames(GSE5389_Top_table_SV)
+# *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+
+SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+SE = SE[,2]
+SE = SE[GSE5389_Top_table_SV$ID]
+GSE5389_Top_table_SV$SE = SE
+
+# Annotating results
+GSE5389_probes = GSE5389_probes[GSE5389_Top_table_SV$ID, ]
+GSE5389_Top_table_SV$Gene_symbol = GSE5389_probes$Gene_symbol
+GSE5389_Top_table_SV$Gene_symbol_non_hgnc = GSE5389_probes$Gene_symbol_non_hgnc
+GSE5389_Top_table_SV$Tissue = GSE5389_pheno_curated$TISSUE[1]
+GSE5389_Top_table_SV$Tissue_type = "Brain"
+GSE5389_Top_table_SV$Technology = "Array"
+write.csv(GSE5389_Top_table_SV, "GSE5389_results/GSE5389_Top_table_SV.csv")
+
 rm(list = ls(pattern = "GSE5389"))
 gc()
 
@@ -1547,11 +1676,83 @@ GSE66937_Top_table = do.call(rbind, GSE66937_analysis_list)
 rownames(GSE66937_Top_table) = NULL
 
 # Saving outputs
-write.csv(GSE66937_expression, "GSE66937_results/GSE66937_expression.csv")
+GSE66937_expression_values = exprs(GSE66937_expression)
+all(rownames(GSE66937_expression_values) == GSE66937_probes$ID) # TRUE
+all(colnames(GSE66937_expression_values) == GSE66937_pheno_curated$GEO_ACCESSION) # TRUE
+
+write.csv(GSE66937_expression_values, "GSE66937_results/GSE66937_expression.csv")
 write.csv(GSE66937_probes, "GSE66937_results/GSE66937_probes.csv")
 write.csv(GSE66937_pheno_curated, "GSE66937_results/GSE66937_pheno_curated.csv")
 write.csv(GSE66937_Top_table_no_covar, "GSE66937_results/GSE66937_Top_table_no_covar.csv")
 write.csv(GSE66937_Top_table, "GSE66937_results/GSE66937_Top_table.csv")
+
+
+
+# Surrogate variable analysis per tissue
+GSE66937_analysis_list_SV = list()
+
+for (x in 1:length(unique(GSE66937_pheno_curated$BRAIN_REGION))){
+  
+  TMP_tissue = unique(GSE66937_pheno_curated$BRAIN_REGION)[x]
+  writeLines(paste0("Working on: ", TMP_tissue))
+  
+  GSE66937_TMP_DF = GSE66937_pheno_curated[GSE66937_pheno_curated$BRAIN_REGION == TMP_tissue, ]
+  model_matrix_SV_GSE66937 = model.matrix(~ SUICIDE, data = GSE66937_TMP_DF)
+  GSE66937_expression_TMP = GSE66937_expression_values[, rownames(model_matrix_SV_GSE66937)]
+  
+  
+  num_SV_GSE66937 = sva::num.sv(GSE66937_expression_TMP, model_matrix_SV_GSE66937, method = "leek")
+  
+  # Select number of surrogate variables
+  num_SV_selected_GSE66937 = min(c(num_SV_GSE66937, 5))
+  print(paste0("Number of suggested SVs: ", num_SV_GSE66937))
+  print(paste0("Number of selected SVs: ", num_SV_selected_GSE66937))
+  
+  # Obtain surrogate variables as covariates
+  mod0_GSE66937 = model.matrix(~1,data=GSE66937_TMP_DF)
+  svobj_GSE66937 = sva(GSE66937_expression_TMP, 
+                        model_matrix_SV_GSE66937,
+                        mod0_GSE66937, 
+                        n.sv=num_SV_selected_GSE66937)
+  sv_df_GSE66937 = svobj_GSE66937$sv
+  model_matrix_SV_full_GSE66937 = cbind(model_matrix_SV_GSE66937, sv_df_GSE66937)
+  
+  fit = lmFit(GSE66937_expression_TMP, model_matrix_SV_full_GSE66937)
+  fitE = eBayes(fit)
+  GSE66937_Top_table_SV_TMP = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+  GSE66937_Top_table_SV_TMP$ID = rownames(GSE66937_Top_table_SV_TMP)
+  # *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+  
+  SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+  SE = SE[,2]
+  SE = SE[GSE66937_Top_table_SV_TMP$ID]
+  GSE66937_Top_table_SV_TMP$SE = SE
+  
+  # Annotating results
+  GSE66937_probes_TMP = GSE66937_probes
+  GSE66937_probes_TMP = GSE66937_probes_TMP[GSE66937_Top_table_SV_TMP$ID, ]
+  GSE66937_Top_table_SV_TMP$Gene_symbol = GSE66937_probes_TMP$Gene_symbol
+  GSE66937_Top_table_SV_TMP$Gene_symbol_non_hgnc = GSE66937_probes_TMP$Gene_symbol_non_hgnc
+  GSE66937_Top_table_SV_TMP$Tissue = TMP_tissue
+  GSE66937_Top_table_SV_TMP$Tissue_type = "Brain"
+  GSE66937_Top_table_SV_TMP$Technology = "Array"
+  
+  GSE66937_analysis_list_SV[[x]] = GSE66937_Top_table_SV_TMP
+  
+}
+
+# Stats on SVs
+# amygdala: 3 SVs
+# hippocampus: 0 SVs
+# thalamus: 2 SVs
+# DLPFC: 0 SVs
+
+lapply(GSE66937_analysis_list_SV, head)
+GSE66937_Top_table_SV = do.call(rbind, GSE66937_analysis_list_SV)
+rownames(GSE66937_Top_table_SV) = NULL
+write.csv(GSE66937_Top_table_SV, "GSE66937_results/GSE66937_Top_table_SV.csv")
+
+
 rm(list = ls(pattern = "GSE66937"))
 gc()
 
@@ -1610,6 +1811,7 @@ GSE199536_geo_record = getGEO("GSE199536")
 GSE199536_geo_record = GSE199536_geo_record[[1]]
 GSE199536_pheno = pData(GSE199536_geo_record)
 GSE199536_pheno = fix_columns(GSE199536_pheno)
+GSE199536_probes = GSE199536_geo_record@featureData@data
 
 GSE199536_pheno_curated = GSE199536_pheno
 
@@ -1768,11 +1970,50 @@ GSE199536_Top_table$Technology = "Array"
 
 # Saving outputs
 dir.create("GSE199536_results")
-write.csv(GSE199536_expression, "GSE199536_results/GSE199536_expression.csv")
+GSE199536_expression_values = exprs(GSE199536_expression)
+write.csv(GSE199536_expression_values, "GSE199536_results/GSE199536_expression.csv")
 write.csv(GSE199536_probes, "GSE199536_results/GSE199536_probes.csv")
 write.csv(GSE199536_pheno_curated, "GSE199536_results/GSE199536_pheno_curated.csv")
 write.csv(GSE199536_Top_table_no_covar, "GSE199536_results/GSE199536_Top_table_no_covar.csv")
 write.csv(GSE199536_Top_table, "GSE199536_results/GSE199536_Top_table.csv")
+
+
+
+#### Surrogate variable analysis
+model_matrix_SV_GSE199536 = model.matrix(~ SUICIDE, data = GSE199536_pheno_curated)
+num_SV_GSE199536 = sva::num.sv(GSE199536_expression_values, model_matrix_SV_GSE199536, method = "leek") # Suggested 5
+num_SV_selected_GSE199536 = min(c(num_SV_GSE199536, 5))
+
+# Obtain surrogate variables as covariates
+mod0_GSE199536 = model.matrix(~1,data=GSE199536_pheno_curated)
+svobj_GSE199536 = sva(GSE199536_expression_values, 
+                    model_matrix_SV_GSE199536,
+                    mod0_GSE199536, 
+                    n.sv=num_SV_selected_GSE199536)
+
+sv_df_GSE199536 = svobj_GSE199536$sv
+model_matrix_SV_full_GSE199536 = cbind(model_matrix_SV_GSE199536, sv_df_GSE199536)
+
+# Differential expression
+fit = lmFit(GSE199536_expression_values, model_matrix_SV_full_GSE199536)
+fitE = eBayes(fit)
+GSE199536_Top_table_SV = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+GSE199536_Top_table_SV$ID = rownames(GSE199536_Top_table_SV)
+# *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+
+SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+SE = SE[,2]
+SE = SE[GSE199536_Top_table_SV$ID]
+GSE199536_Top_table_SV$SE = SE
+
+# Annotating results
+GSE199536_probes = GSE199536_probes[GSE199536_Top_table_SV$ID, ]
+GSE199536_Top_table_SV$Gene_symbol = GSE199536_probes$Gene_symbol
+GSE199536_Top_table_SV$Gene_symbol_non_hgnc = GSE199536_probes$Gene_symbol_non_hgnc
+GSE199536_Top_table_SV$Tissue = GSE199536_pheno_curated$TISSUE[1]
+GSE199536_Top_table_SV$Tissue_type = "Brain"
+GSE199536_Top_table_SV$Technology = "Array"
+write.csv(GSE199536_Top_table_SV, "GSE199536_results/GSE199536_Top_table_SV.csv")
 
 rm(list = ls(pattern = "GSE199536"))
 gc()
@@ -2087,11 +2328,50 @@ GSE92538_U133A_Top_table$Tissue = GSE92538_pheno_curated_3$TISSUE[1]
 GSE92538_U133A_Top_table$Tissue_type = "Brain"
 GSE92538_U133A_Top_table$Technology = "Array"
 
-write.csv(GSE92538_expression, "GSE92538_U133A_results/GSE92538_expression.csv")
+
+GSE92538_expression_values = exprs(GSE92538_expression)
+write.csv(GSE92538_expression_values, "GSE92538_U133A_results/GSE92538_expression.csv")
 write.csv(GSE92538_probes, "GSE92538_U133A_results/GSE92538_probes.csv")
 write.csv(GSE92538_pheno_curated_3, "GSE92538_U133A_results/GSE92538_pheno_curated.csv")
 write.csv(GSE92538_U133A_Top_table_no_covar, "GSE92538_U133A_results/GSE92538_U133A_Top_table_no_covar.csv")
 write.csv(GSE92538_U133A_Top_table, "GSE92538_U133A_results/GSE92538_U133A_Top_table.csv")
+
+
+#### Surrogate variable analysis
+model_matrix_SV_GSE92538_U133A = model.matrix(~ SUICIDE__1_YES_, data = GSE92538_pheno_curated_3)
+num_SV_GSE92538_U133A = sva::num.sv(GSE92538_expression_values, model_matrix_SV_GSE92538_U133A, method = "leek") # Suggested 3
+num_SV_selected_GSE92538_U133A = min(c(num_SV_GSE92538_U133A, 5))
+
+# Obtain surrogate variables as covariates
+mod0_GSE92538_U133A = model.matrix(~1,data=GSE92538_pheno_curated_3)
+svobj_GSE92538_U133A = sva(GSE92538_expression_values, 
+                    model_matrix_SV_GSE92538_U133A,
+                    mod0_GSE92538_U133A, 
+                    n.sv=num_SV_selected_GSE92538_U133A)
+
+sv_df_GSE92538_U133A = svobj_GSE92538_U133A$sv
+model_matrix_SV_full_GSE92538_U133A = cbind(model_matrix_SV_GSE92538_U133A, sv_df_GSE92538_U133A)
+
+# Differential expression
+fit = lmFit(GSE92538_expression_values, model_matrix_SV_full_GSE92538_U133A)
+fitE = eBayes(fit)
+GSE92538_U133A_Top_table_SV = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+GSE92538_U133A_Top_table_SV$ID = rownames(GSE92538_U133A_Top_table_SV)
+# *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+
+SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+SE = SE[,2]
+SE = SE[GSE92538_U133A_Top_table_SV$ID]
+GSE92538_U133A_Top_table_SV$SE = SE
+
+# Annotating results
+GSE92538_probes = GSE92538_probes[GSE92538_U133A_Top_table_SV$ID, ]
+GSE92538_U133A_Top_table_SV$Gene_symbol = GSE92538_probes$Gene_symbol
+GSE92538_U133A_Top_table_SV$Gene_symbol_non_hgnc = GSE92538_probes$Gene_symbol_non_hgnc
+GSE92538_U133A_Top_table_SV$Tissue = GSE92538_pheno_curated_3$TISSUE[1]
+GSE92538_U133A_Top_table_SV$Tissue_type = "Brain"
+GSE92538_U133A_Top_table_SV$Technology = "Array"
+write.csv(GSE92538_U133A_Top_table_SV, "GSE92538_U133A_results/GSE92538_U133A_Top_table_SV.csv")
 
 rm(list = ls(pattern = "GSE92538"))
 gc()
@@ -2327,12 +2607,49 @@ GSE92538_U133_PLUS2_Top_table$Tissue = GSE92538_pheno_curated_3$TISSUE[1]
 GSE92538_U133_PLUS2_Top_table$Tissue_type = "Brain"
 GSE92538_U133_PLUS2_Top_table$Technology = "Array"
 
-
-write.csv(GSE92538_expression, "GSE92538_U133_PLUS2_results/GSE92538_expression.csv")
+GSE92538_expression_values = exprs(GSE92538_expression)
+write.csv(GSE92538_expression_values, "GSE92538_U133_PLUS2_results/GSE92538_expression.csv")
 write.csv(GSE92538_probes, "GSE92538_U133_PLUS2_results/GSE92538_probes.csv")
 write.csv(GSE92538_pheno_curated_3, "GSE92538_U133_PLUS2_results/GSE92538_pheno_curated.csv")
 write.csv(GSE92538_U133_PLUS2_Top_table_no_covar, "GSE92538_U133_PLUS2_results/GSE92538_U133_PLUS2_Top_table_no_covar.csv")
 write.csv(GSE92538_U133_PLUS2_Top_table, "GSE92538_U133_PLUS2_results/GSE92538_U133_PLUS2_Top_table.csv")
+
+
+#### Surrogate variable analysis
+model_matrix_SV_GSE92538_U133_PLUS2 = model.matrix(~ SUICIDE__1_YES_, data = GSE92538_pheno_curated_3)
+num_SV_GSE92538_U133_PLUS2 = sva::num.sv(GSE92538_expression_values, model_matrix_SV_GSE92538_U133_PLUS2, method = "leek") # Suggested 2
+num_SV_selected_GSE92538_U133_PLUS2 = min(c(num_SV_GSE92538_U133_PLUS2, 5))
+
+# Obtain surrogate variables as covariates
+mod0_GSE92538_U133_PLUS2 = model.matrix(~1, data=GSE92538_pheno_curated_3)
+svobj_GSE92538_U133_PLUS2 = sva(GSE92538_expression_values, 
+                    model_matrix_SV_GSE92538_U133_PLUS2,
+                    mod0_GSE92538_U133_PLUS2, 
+                    n.sv=num_SV_selected_GSE92538_U133_PLUS2)
+
+sv_df_GSE92538_U133_PLUS2 = svobj_GSE92538_U133_PLUS2$sv
+model_matrix_SV_full_GSE92538_U133_PLUS2 = cbind(model_matrix_SV_GSE92538_U133_PLUS2, sv_df_GSE92538_U133_PLUS2)
+
+# Differential expression
+fit = lmFit(GSE92538_expression_values, model_matrix_SV_full_GSE92538_U133_PLUS2)
+fitE = eBayes(fit)
+GSE92538_U133_PLUS2_Top_table_SV = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+GSE92538_U133_PLUS2_Top_table_SV$ID = rownames(GSE92538_U133_PLUS2_Top_table_SV)
+# *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+
+SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+SE = SE[,2]
+SE = SE[GSE92538_U133_PLUS2_Top_table_SV$ID]
+GSE92538_U133_PLUS2_Top_table_SV$SE = SE
+
+# Annotating results
+GSE92538_probes = GSE92538_probes[GSE92538_U133_PLUS2_Top_table_SV$ID, ]
+GSE92538_U133_PLUS2_Top_table_SV$Gene_symbol = GSE92538_probes$Gene_symbol
+GSE92538_U133_PLUS2_Top_table_SV$Gene_symbol_non_hgnc = GSE92538_probes$Gene_symbol_non_hgnc
+GSE92538_U133_PLUS2_Top_table_SV$Tissue = GSE92538_pheno_curated_3$TISSUE[1]
+GSE92538_U133_PLUS2_Top_table_SV$Tissue_type = "Brain"
+GSE92538_U133_PLUS2_Top_table_SV$Technology = "Array"
+write.csv(GSE92538_U133_PLUS2_Top_table_SV, "GSE92538_U133_PLUS2_results/GSE92538_U133_PLUS2_Top_table_SV.csv")
 
 rm(list = ls(pattern = "GSE92538"))
 gc()
@@ -3067,6 +3384,95 @@ write.csv(RNAseq_gene_probes, "GSE102556_results/GSE102556_probes.csv")
 write.csv(GSE102556_pheno_curated_2, "GSE102556_results/GSE102556_pheno_curated.csv")
 write.csv(GSE102556_Top_table_no_covar, "GSE102556_results/GSE102556_Top_table_no_covar.csv")
 write.csv(GSE102556_Top_table, "GSE102556_results/GSE102556_Top_table.csv")
+
+
+# Surrogate variable analysis
+# Steps should be as: 1) Filter counts; 2) Calculate SVs with svseq 3) Add SVs to design matrix 4) Perform VOOM 5) Perform DE
+# Modified design matrix should be used both in VOOM and DE
+GSE102556_analysis_list_SV = list()
+
+for (x in 1:length(GSE102556_tissues)){
+  
+  
+  GSE102556_count_tmp = GSE102556_count[-(1:4), ]
+  GSE102556_TMP_tissue = GSE102556_tissues[x]
+  
+  print(paste0("Working on: ", GSE102556_TMP_tissue))
+  
+  GSE102556_pheno_curated_2_tmp = GSE102556_pheno_curated_2[GSE102556_pheno_curated_2$TISSUE == GSE102556_TMP_tissue,]
+  GSE102556_count_tmp = GSE102556_count_tmp[,GSE102556_pheno_curated_2_tmp$RUN_ID]
+  
+  # 80% filter
+  #GSE102556_TMP_transcr_sums = rowSums(GSE102556_count_tmp)
+  #quantile(GSE102556_TMP_transcr_sums, probs = seq(from=0.1, to=1, by=0.05))
+  #GSE102556_TMP_transcr_sums_more_than_5 = apply(GSE102556_count_tmp, 2, function(x) as.numeric(x > 5))  # FALSE become 0, and TRUE becomes 1
+  #GSE102556_TMP_row_selection = which(rowSums(GSE102556_count_tmp) >= 0.8 * ncol(GSE102556_TMP_transcr_sums_more_than_5))
+  #GSE102556_count_tmp = GSE102556_count_tmp[GSE102556_TMP_row_selection,]
+  
+  # Design matrix
+  tmp_design = model.matrix(~ SUICIDE, data = GSE102556_pheno_curated_2_tmp)
+  
+  # egeR filter
+  GSE102556_tmp_dge = DGEList(counts=GSE102556_count_tmp)
+  keep = filterByExpr(GSE102556_tmp_dge, tmp_design)
+  GSE102556_tmp_dge = GSE102556_tmp_dge[keep,,keep.lib.sizes=FALSE]
+  
+  
+  # SV estimation
+  GSE102556_tmp_counts = GSE102556_tmp_dge$counts
+  num_SV_GSE102556 = sva::num.sv(GSE102556_tmp_counts, tmp_design, method = "leek")
+  num_SV_selected_GSE102556 = min(c(num_SV_GSE102556, 5))
+  
+  print(paste0("Number of suggested SVs: ", num_SV_GSE102556))
+  print(paste0("Number of selected SVs: ", num_SV_selected_GSE102556))
+  
+  
+  mod0_GSE102556 = model.matrix(~1, data= GSE102556_pheno_curated_2_tmp)
+  svseq_GSE102556 = svaseq(GSE102556_tmp_counts, 
+                          tmp_design,
+                          mod0_GSE102556,
+                          n.sv=num_SV_selected_GSE102556)
+  
+  sv_df_GSE102556 = svseq_GSE102556$sv
+  tmp_design_full = cbind(tmp_design, sv_df_GSE102556)
+  
+  # Voom
+  GSE102556_tmp_dge = calcNormFactors(GSE102556_tmp_dge)
+  GSE102556_tmp_voom = voom(GSE102556_tmp_dge, tmp_design_full, plot=TRUE)
+  
+  # limma 
+  fit = lmFit(GSE102556_tmp_voom, tmp_design_full)
+  fitE = eBayes(fit)
+  GSE102556_Top_table_SV_TMP = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+  GSE102556_Top_table_SV_TMP$ID = rownames(GSE102556_Top_table_SV_TMP)
+  # *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+  
+  SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+  SE = SE[,2]
+  SE = SE[GSE102556_Top_table_SV_TMP$ID]
+  GSE102556_Top_table_SV_TMP$SE = SE
+  all(names(SE) == GSE102556_Top_table_SV_TMP$ID) # TRUE
+  
+  # Annotating results
+  GSE102556_probes_TMP = RNAseq_gene_probes
+  GSE102556_probes_TMP = GSE102556_probes_TMP[GSE102556_Top_table_SV_TMP$ID, ]
+  GSE102556_Top_table_SV_TMP$Gene_symbol = GSE102556_probes_TMP$Gene_symbol
+  GSE102556_Top_table_SV_TMP$Gene_symbol_non_hgnc = NA
+  GSE102556_Top_table_SV_TMP$Tissue = GSE102556_TMP_tissue
+  GSE102556_Top_table_SV_TMP$Tissue_type = "Brain"
+  GSE102556_Top_table_SV_TMP$Technology = "RNA-seq"
+  
+  GSE102556_analysis_list_SV[[x]] = GSE102556_Top_table_SV_TMP
+  
+}
+
+
+
+GSE102556_Top_table_SV = do.call(rbind, GSE102556_analysis_list_SV)
+rownames(GSE102556_Top_table_SV) = NULL
+write.csv(GSE102556_Top_table_SV, "GSE102556_results/GSE102556_Top_table_SV.csv")
+
+
 rm(list = ls(pattern = "GSE102556"))
 gc()
 
@@ -3318,6 +3724,67 @@ write.csv(RNAseq_gene_probes, "GSE243356_results/GSE243356_probes.csv")
 write.csv(GSE243356_pheno_curated, "GSE243356_results/GSE243356_pheno_curated.csv")
 write.csv(GSE243356_Top_table_no_covar, "GSE243356_results/GSE243356_Top_table_no_covar.csv")
 write.csv(GSE243356_Top_table, "GSE243356_results/GSE243356_Top_table.csv")
+
+#### Surrogate variable analysis
+# Steps should be as: 1) Filter counts; 2) Calculate SVs with svseq 3) Add SVs to design matrix 4) Perform VOOM 5) Perform DE
+# Modified design matrix should be used both in VOOM and DE
+
+GSE243356_count_tmp = GSE243356_count[-(1:4), ]
+
+# Design matrix
+tmp_design = model.matrix(~ GROUP, data = GSE243356_pheno_curated)
+
+# egeR filter
+GSE243356_tmp_dge = DGEList(counts=GSE243356_count_tmp)
+keep = filterByExpr(GSE243356_tmp_dge, tmp_design)
+GSE243356_tmp_dge = GSE243356_tmp_dge[keep,,keep.lib.sizes=FALSE]
+
+
+# SV estimation
+GSE243356_tmp_counts = GSE243356_tmp_dge$counts
+num_SV_GSE243356 = sva::num.sv(GSE243356_tmp_counts, tmp_design, method = "leek") # Suggested 59!
+num_SV_selected_GSE243356 = min(c(num_SV_GSE243356, 5))
+
+print(paste0("Number of suggested SVs: ", num_SV_GSE243356))
+print(paste0("Number of selected SVs: ", num_SV_selected_GSE243356))
+
+
+mod0_GSE243356 = model.matrix(~1, data = GSE243356_pheno_curated)
+svseq_GSE243356 = svaseq(GSE243356_tmp_counts, 
+                         tmp_design,
+                         mod0_GSE243356,
+                         n.sv=num_SV_selected_GSE243356)
+
+sv_df_GSE243356 = svseq_GSE243356$sv
+tmp_design_full = cbind(tmp_design, sv_df_GSE243356)
+
+# Voom
+GSE243356_tmp_dge = calcNormFactors(GSE243356_tmp_dge)
+GSE243356_tmp_voom = voom(GSE243356_tmp_dge, tmp_design_full, plot=TRUE)
+
+# limma 
+fit = lmFit(GSE243356_tmp_voom, tmp_design_full)
+fitE = eBayes(fit)
+GSE243356_Top_table_SV_TMP = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+GSE243356_Top_table_SV_TMP$ID = rownames(GSE243356_Top_table_SV_TMP)
+# *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+
+SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+SE = SE[,2]
+SE = SE[GSE243356_Top_table_SV_TMP$ID]
+GSE243356_Top_table_SV_TMP$SE = SE
+all(names(SE) == GSE243356_Top_table_SV_TMP$ID) # TRUE
+
+# Annotating results
+GSE243356_probes_TMP = RNAseq_gene_probes
+GSE243356_probes_TMP = GSE243356_probes_TMP[GSE243356_Top_table_SV_TMP$ID, ]
+GSE243356_Top_table_SV_TMP$Gene_symbol = GSE243356_probes_TMP$Gene_symbol
+GSE243356_Top_table_SV_TMP$Gene_symbol_non_hgnc = NA
+GSE243356_Top_table_SV_TMP$Tissue = GSE243356_pheno_curated$TISSUE[1]
+GSE243356_Top_table_SV_TMP$Tissue_type = "Brain"
+GSE243356_Top_table_SV_TMP$Technology = "RNA-seq"
+
+write.csv(GSE243356_Top_table_SV_TMP, "GSE243356_results/GSE243356_Top_table_SV.csv")
 
 rm(list = ls(pattern = "GSE243356"))
 gc()
@@ -3674,11 +4141,73 @@ write.csv(GSE248260_pheno_curated_2, "GSE248260_results/GSE248260_pheno_curated.
 write.csv(GSE248260_Top_table_no_covar, "GSE248260_results/GSE248260_Top_table_no_covar.csv")
 write.csv(GSE248260_Top_table, "GSE248260_results/GSE248260_Top_table.csv")
 
+
+#### Surrogate variable analysis
+# Steps should be as: 1) Filter counts; 2) Calculate SVs with svseq 3) Add SVs to design matrix 4) Perform VOOM 5) Perform DE
+# Modified design matrix should be used both in VOOM and DE
+
+GSE248260_count_tmp = GSE248260_count[-(1:4), ]
+
+# Design matrix
+tmp_design = model.matrix(~ SUICIDE, data = GSE248260_pheno_curated)
+
+# egeR filter
+GSE248260_tmp_dge = DGEList(counts=GSE248260_count_tmp)
+keep = filterByExpr(GSE248260_tmp_dge, tmp_design)
+GSE248260_tmp_dge = GSE248260_tmp_dge[keep,,keep.lib.sizes=FALSE]
+
+
+# SV estimation
+GSE248260_tmp_counts = GSE248260_tmp_dge$counts
+num_SV_GSE248260 = sva::num.sv(GSE248260_tmp_counts, tmp_design, method = "leek") # Suggested 22!
+num_SV_selected_GSE248260 = min(c(num_SV_GSE248260, 5))
+
+print(paste0("Number of suggested SVs: ", num_SV_GSE248260))
+print(paste0("Number of selected SVs: ", num_SV_selected_GSE248260))
+
+
+mod0_GSE248260 = model.matrix(~1, data = GSE248260_pheno_curated)
+svseq_GSE248260 = svaseq(GSE248260_tmp_counts, 
+                         tmp_design,
+                         mod0_GSE248260,
+                         n.sv=num_SV_selected_GSE248260)
+
+sv_df_GSE248260 = svseq_GSE248260$sv
+tmp_design_full = cbind(tmp_design, sv_df_GSE248260)
+
+# Voom
+GSE248260_tmp_dge = calcNormFactors(GSE248260_tmp_dge)
+GSE248260_tmp_voom = voom(GSE248260_tmp_dge, tmp_design_full, plot=TRUE)
+
+# limma 
+fit = lmFit(GSE248260_tmp_voom, tmp_design_full)
+fitE = eBayes(fit)
+GSE248260_Top_table_SV_TMP = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+GSE248260_Top_table_SV_TMP$ID = rownames(GSE248260_Top_table_SV_TMP)
+# *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+
+SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+SE = SE[,2]
+SE = SE[GSE248260_Top_table_SV_TMP$ID]
+GSE248260_Top_table_SV_TMP$SE = SE
+all(names(SE) == GSE248260_Top_table_SV_TMP$ID) # TRUE
+
+# Annotating results
+GSE248260_probes_TMP = RNAseq_gene_probes
+GSE248260_probes_TMP = GSE248260_probes_TMP[GSE248260_Top_table_SV_TMP$ID, ]
+GSE248260_Top_table_SV_TMP$Gene_symbol = GSE248260_probes_TMP$Gene_symbol
+GSE248260_Top_table_SV_TMP$Gene_symbol_non_hgnc = NA
+GSE248260_Top_table_SV_TMP$Tissue = GSE248260_pheno_curated$TISSUE[1]
+GSE248260_Top_table_SV_TMP$Tissue_type = "Brain"
+GSE248260_Top_table_SV_TMP$Technology = "RNA-seq"
+
+write.csv(GSE248260_Top_table_SV_TMP, "GSE248260_results/GSE248260_Top_table_SV.csv")
+
 rm(list = ls(pattern = "GSE248260"))
 gc()
 
 
-################### GSE247998 ###################
+################### BLOOD GSE247998 ###################
 # https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE247998
 # paper: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC11189724/
 
@@ -4006,6 +4535,68 @@ write.csv(RNAseq_gene_probes, "GSE247998_results/GSE247998_probes.csv")
 write.csv(GSE247998_pheno_curated, "GSE247998_results/GSE247998_pheno_curated.csv")
 write.csv(GSE247998_Top_table_no_covar, "GSE247998_results/GSE247998_Top_table_no_covar.csv")
 write.csv(GSE247998_Top_table, "GSE247998_results/GSE247998_Top_table.csv")
+
+
+#### Surrogate variable analysis
+# Steps should be as: 1) Filter counts; 2) Calculate SVs with svseq 3) Add SVs to design matrix 4) Perform VOOM 5) Perform DE
+# Modified design matrix should be used both in VOOM and DE
+
+GSE247998_count_tmp = GSE247998_count[-(1:4), ]
+
+# Design matrix
+tmp_design = model.matrix(~ SUICIDE, data = GSE247998_pheno_curated)
+
+# egeR filter
+GSE247998_tmp_dge = DGEList(counts=GSE247998_count_tmp)
+keep = filterByExpr(GSE247998_tmp_dge, tmp_design)
+GSE247998_tmp_dge = GSE247998_tmp_dge[keep,,keep.lib.sizes=FALSE]
+
+
+# SV estimation
+GSE247998_tmp_counts = GSE247998_tmp_dge$counts
+num_SV_GSE247998 = sva::num.sv(GSE247998_tmp_counts, tmp_design, method = "leek") # Suggested 98!
+num_SV_selected_GSE247998 = min(c(num_SV_GSE247998, 5))
+
+print(paste0("Number of suggested SVs: ", num_SV_GSE247998))
+print(paste0("Number of selected SVs: ", num_SV_selected_GSE247998))
+
+
+mod0_GSE247998 = model.matrix(~1, data = GSE247998_pheno_curated)
+svseq_GSE247998 = svaseq(GSE247998_tmp_counts, 
+                         tmp_design,
+                         mod0_GSE247998,
+                         n.sv=num_SV_selected_GSE247998)
+
+sv_df_GSE247998 = svseq_GSE247998$sv
+tmp_design_full = cbind(tmp_design, sv_df_GSE247998)
+
+# Voom
+GSE247998_tmp_dge = calcNormFactors(GSE247998_tmp_dge)
+GSE247998_tmp_voom = voom(GSE247998_tmp_dge, tmp_design_full, plot=TRUE)
+
+# limma 
+fit = lmFit(GSE247998_tmp_voom, tmp_design_full)
+fitE = eBayes(fit)
+GSE247998_Top_table_SV_TMP = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+GSE247998_Top_table_SV_TMP$ID = rownames(GSE247998_Top_table_SV_TMP)
+# *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+
+SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+SE = SE[,2]
+SE = SE[GSE247998_Top_table_SV_TMP$ID]
+GSE247998_Top_table_SV_TMP$SE = SE
+all(names(SE) == GSE247998_Top_table_SV_TMP$ID) # TRUE
+
+# Annotating results
+GSE247998_probes_TMP = RNAseq_gene_probes
+GSE247998_probes_TMP = GSE247998_probes_TMP[GSE247998_Top_table_SV_TMP$ID, ]
+GSE247998_Top_table_SV_TMP$Gene_symbol = GSE247998_probes_TMP$Gene_symbol
+GSE247998_Top_table_SV_TMP$Gene_symbol_non_hgnc = NA
+GSE247998_Top_table_SV_TMP$Tissue = GSE247998_pheno_curated$TISSUE[1]
+GSE247998_Top_table_SV_TMP$Tissue_type = "Blood"
+GSE247998_Top_table_SV_TMP$Technology = "RNA-seq"
+
+write.csv(GSE247998_Top_table_SV_TMP, "GSE247998_results/GSE247998_Top_table_SV.csv")
 
 rm(list = ls(pattern = "GSE247998"))
 gc()
@@ -4337,6 +4928,7 @@ all(colnames(GSE202537_count) == GSE202537_count$RUN_ID) # TRUE
 
 GSE202537_tissues = unique(GSE202537_pheno_curated_2$TISSUE)
 
+# Analysis without covariates per tissue
 GSE202537_analysis_list_no_covar = list()
 
 for (x in 1:length(GSE202537_tissues)){
@@ -4389,7 +4981,7 @@ for (x in 1:length(GSE202537_tissues)){
 GSE202537_Top_table_no_covar = do.call(rbind, GSE202537_analysis_list_no_covar)
 
 
-# analysis with covariates in a loop
+# Analysis with covariates in a loop
 GSE202537_tissues = unique(GSE202537_pheno_curated_2$TISSUE)
 
 # MANNER_OF_DEATH is not included as it is related to suicide group and Natural and Accidental are just subclasses of control
@@ -4452,6 +5044,100 @@ write.csv(RNAseq_gene_probes, "GSE202537_results/GSE202537_probes.csv")
 write.csv(GSE202537_pheno_curated_2, "GSE202537_results/GSE202537_pheno_curated.csv")
 write.csv(GSE202537_Top_table_no_covar, "GSE202537_results/GSE202537_Top_table_no_covar.csv")
 write.csv(GSE202537_Top_table, "GSE202537_results/GSE202537_Top_table.csv")
+
+
+#### Surrogate variable analysis
+# Steps should be as: 1) Filter counts; 2) Calculate SVs with svseq 3) Add SVs to design matrix 4) Perform VOOM 5) Perform DE
+# Modified design matrix should be used both in VOOM and DE
+
+GSE202537_analysis_list_SV = list()
+
+for (x in 1:length(GSE202537_tissues)){
+  
+  
+  GSE202537_count_tmp = GSE202537_count[-(1:4), ]
+  GSE202537_TMP_tissue = GSE202537_tissues[x]
+  
+  print(paste0("Working on: ", GSE202537_TMP_tissue))
+  
+  GSE202537_pheno_curated_2_tmp = GSE202537_pheno_curated_2[GSE202537_pheno_curated_2$TISSUE == GSE202537_TMP_tissue,]
+  GSE202537_count_tmp = GSE202537_count_tmp[,GSE202537_pheno_curated_2_tmp$RUN_ID]
+  
+  # Design matrix
+  tmp_design = model.matrix(~ SUICIDE, data = GSE202537_pheno_curated_2_tmp)
+  
+  # egeR filter
+  GSE202537_tmp_dge = DGEList(counts=GSE202537_count_tmp)
+  keep = filterByExpr(GSE202537_tmp_dge, tmp_design)
+  GSE202537_tmp_dge = GSE202537_tmp_dge[keep,,keep.lib.sizes=FALSE]
+  
+  # SV estimation
+  GSE202537_tmp_counts = GSE202537_tmp_dge$counts
+  num_SV_GSE202537 = sva::num.sv(GSE202537_tmp_counts, tmp_design, method = "leek")
+  num_SV_selected_GSE202537 = min(c(num_SV_GSE202537, 5))
+  
+  print(paste0("Number of suggested SVs: ", num_SV_GSE202537))
+  print(paste0("Number of selected SVs: ", num_SV_selected_GSE202537))
+  
+  
+  mod0_GSE202537 = model.matrix(~1, data = GSE202537_pheno_curated_2_tmp)
+  svseq_GSE202537 = svaseq(GSE202537_tmp_counts, 
+                           tmp_design,
+                           mod0_GSE202537,
+                           n.sv=num_SV_selected_GSE202537)
+  
+  sv_df_GSE202537 = svseq_GSE202537$sv
+  tmp_design_full = cbind(tmp_design, sv_df_GSE202537)
+  
+  
+  GSE202537_tmp_dge = calcNormFactors(GSE202537_tmp_dge)
+  GSE202537_tmp_voom = voom(GSE202537_tmp_dge, tmp_design_full, plot=TRUE)
+  
+  # limma 
+  fit = lmFit(GSE202537_tmp_voom, tmp_design_full)
+  fitE = eBayes(fit)
+  GSE202537_Top_table_SV_TMP = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+  GSE202537_Top_table_SV_TMP$ID = rownames(GSE202537_Top_table_SV_TMP)
+  # *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+  
+  SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+  SE = SE[,2]
+  SE = SE[GSE202537_Top_table_SV_TMP$ID]
+  GSE202537_Top_table_SV_TMP$SE = SE
+  all(names(SE) == GSE202537_Top_table_SV_TMP$ID) # TRUE
+  
+  # Annotating results
+  GSE202537_probes_TMP = RNAseq_gene_probes
+  GSE202537_probes_TMP = GSE202537_probes_TMP[GSE202537_Top_table_SV_TMP$ID, ]
+  GSE202537_Top_table_SV_TMP$Gene_symbol = GSE202537_probes_TMP$Gene_symbol
+  GSE202537_Top_table_SV_TMP$Gene_symbol_non_hgnc = NA
+  GSE202537_Top_table_SV_TMP$Tissue = GSE202537_TMP_tissue
+  GSE202537_Top_table_SV_TMP$Tissue_type = "Brain"
+  GSE202537_Top_table_SV_TMP$Technology = "RNA-seq"
+  
+  GSE202537_analysis_list_SV[[x]] = GSE202537_Top_table_SV_TMP
+  
+}
+
+GSE202537_Top_table_SV = do.call(rbind, GSE202537_analysis_list_SV)
+
+'
+[1] "Working on: Nac"
+[1] "Number of suggested SVs: 65"
+[1] "Number of selected SVs: 5"
+Number of significant surrogate variables is:  5 
+Iteration (out of 5 ):1  2  3  4  5  [1] "Working on: Caudate"
+[1] "Number of suggested SVs: 68"
+[1] "Number of selected SVs: 5"
+Number of significant surrogate variables is:  5 
+Iteration (out of 5 ):1  2  3  4  5  [1] "Working on: Putamen"
+[1] "Number of suggested SVs: 67"
+[1] "Number of selected SVs: 5"
+Number of significant surrogate variables is:  5 
+Iteration (out of 5 ):1  2  3  4  5 
+'
+
+write.csv(GSE202537_Top_table_SV, "GSE202537_results/GSE202537_Top_table_SV.csv")
 
 rm(list = ls(pattern = "GSE202537"))
 gc()
@@ -4787,7 +5473,6 @@ GSE101521_Top_table_no_covar_TMP$Technology = "RNA-seq"
 
 
 # analysis with covariates
-
 GSE101521_count_tmp = GSE101521_count[-(1:4), ]
 
 # Design matrix
@@ -4835,6 +5520,66 @@ write.csv(RNAseq_gene_probes, "GSE101521_results/GSE101521_probes.csv")
 write.csv(GSE101521_pheno_curated, "GSE101521_results/GSE101521_pheno_curated.csv")
 write.csv(GSE101521_Top_table_no_covar, "GSE101521_results/GSE101521_Top_table_no_covar.csv")
 write.csv(GSE101521_Top_table, "GSE101521_results/GSE101521_Top_table.csv")
+
+
+#### Surrogate variable analysis
+# Steps should be as: 1) Filter counts; 2) Calculate SVs with svseq 3) Add SVs to design matrix 4) Perform VOOM 5) Perform DE
+# Modified design matrix should be used both in VOOM and DE
+
+GSE101521_count_tmp = GSE101521_count[-(1:4), ]
+
+# Design matrix
+tmp_design = model.matrix(~ SUICIDE, data = GSE101521_pheno_curated)
+
+# egeR filter
+GSE101521_tmp_dge = DGEList(counts=GSE101521_count_tmp)
+keep = filterByExpr(GSE101521_tmp_dge, tmp_design)
+GSE101521_tmp_dge = GSE101521_tmp_dge[keep,,keep.lib.sizes=FALSE]
+
+# SV estimation
+GSE101521_tmp_counts = GSE101521_tmp_dge$counts
+num_SV_GSE101521 = sva::num.sv(GSE101521_tmp_counts, tmp_design, method = "leek") # Suggested 57
+num_SV_selected_GSE101521 = min(c(num_SV_GSE101521, 5))
+
+print(paste0("Number of suggested SVs: ", num_SV_GSE101521))
+print(paste0("Number of selected SVs: ", num_SV_selected_GSE101521))
+
+
+mod0_GSE101521 = model.matrix(~1, data = GSE101521_pheno_curated)
+svseq_GSE101521 = svaseq(GSE101521_tmp_counts, 
+                         tmp_design,
+                         mod0_GSE101521,
+                         n.sv=num_SV_selected_GSE101521)
+
+sv_df_GSE101521 = svseq_GSE101521$sv
+tmp_design_full = cbind(tmp_design, sv_df_GSE101521)
+
+GSE101521_tmp_dge = calcNormFactors(GSE101521_tmp_dge)
+GSE101521_tmp_voom = voom(GSE101521_tmp_dge, tmp_design_full, plot=TRUE)
+
+# limma 
+fit = lmFit(GSE101521_tmp_voom, tmp_design_full)
+fitE = eBayes(fit)
+GSE101521_Top_table_SV_TMP = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+GSE101521_Top_table_SV_TMP$ID = rownames(GSE101521_Top_table_SV_TMP)
+# *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+
+SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+SE = SE[,2]
+SE = SE[GSE101521_Top_table_SV_TMP$ID]
+GSE101521_Top_table_SV_TMP$SE = SE
+all(names(SE) == GSE101521_Top_table_SV_TMP$ID) # TRUE
+
+# Annotating results
+GSE101521_probes_TMP = RNAseq_gene_probes
+GSE101521_probes_TMP = GSE101521_probes_TMP[GSE101521_Top_table_SV_TMP$ID, ]
+GSE101521_Top_table_SV_TMP$Gene_symbol = GSE101521_probes_TMP$Gene_symbol
+GSE101521_Top_table_SV_TMP$Gene_symbol_non_hgnc = NA
+GSE101521_Top_table_SV_TMP$Tissue = GSE101521_pheno_curated$TISSUE[1]
+GSE101521_Top_table_SV_TMP$Tissue_type = "Brain"
+GSE101521_Top_table_SV_TMP$Technology = "RNA-seq"
+
+write.csv(GSE101521_Top_table_SV_TMP, "GSE101521_results/GSE101521_Top_table_SV.csv")
 
 rm(list = ls(pattern = "GSE101521"))
 gc()
@@ -5137,6 +5882,64 @@ write.csv(GSE144136_Top_table_no_covar_TMP, "GSE144136_results/GSE144136_Top_tab
 write.csv(GSE144136_Top_table_TMP, "GSE144136_results/GSE144136_Top_table.csv")
 write.csv(GSE144136_Top_table_no_covar_cell_types, "GSE144136_results/GSE144136_Top_table_no_covar_cell_types.csv")
 
+#### Surrogate variable analysis
+GSE144136_count_tmp = GSE144136_GSE213982_counts_mixed[,GSE144136_selection]
+
+# Design matrix
+tmp_design = model.matrix(~ GROUP, data = GSE144136_pheno_curated)
+
+# egeR filter
+GSE144136_tmp_dge = DGEList(counts=GSE144136_count_tmp)
+keep = filterByExpr(GSE144136_tmp_dge, tmp_design)
+GSE144136_tmp_dge = GSE144136_tmp_dge[keep,,keep.lib.sizes=FALSE]
+
+# SV estimation
+GSE144136_tmp_counts = GSE144136_tmp_dge$counts
+num_SV_GSE144136 = sva::num.sv(GSE144136_tmp_counts, tmp_design, method = "leek") # Suggested 30
+num_SV_selected_GSE144136 = min(c(num_SV_GSE144136, 5))
+
+print(paste0("Number of suggested SVs: ", num_SV_GSE144136))
+print(paste0("Number of selected SVs: ", num_SV_selected_GSE144136))
+
+
+mod0_GSE144136 = model.matrix(~1, data= GSE144136_pheno_curated)
+svseq_GSE144136 = svaseq(GSE144136_tmp_counts, 
+                         tmp_design,
+                         mod0_GSE144136,
+                         n.sv=num_SV_selected_GSE144136)
+
+sv_df_GSE144136 = svseq_GSE144136$sv
+tmp_design_full = cbind(tmp_design, sv_df_GSE144136)
+
+# Voom
+GSE144136_tmp_dge = calcNormFactors(GSE144136_tmp_dge)
+GSE144136_tmp_voom = voom(GSE144136_tmp_dge, tmp_design_full, plot=TRUE)
+
+# limma 
+fit = lmFit(GSE144136_tmp_voom, tmp_design_full)
+fitE = eBayes(fit)
+GSE144136_Top_table_SV_TMP = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+GSE144136_Top_table_SV_TMP$ID = rownames(GSE144136_Top_table_SV_TMP)
+# *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+
+SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+SE = SE[,2]
+SE = SE[GSE144136_Top_table_SV_TMP$ID]
+GSE144136_Top_table_SV_TMP$SE = SE
+all(names(SE) == GSE144136_Top_table_SV_TMP$ID) # TRUE
+
+# Annotating results
+GSE144136_probes_TMP = GSE144136_GSE213982_probes
+GSE144136_probes_TMP = GSE144136_probes_TMP[GSE144136_Top_table_SV_TMP$ID, ]
+GSE144136_Top_table_SV_TMP$Gene_symbol = GSE144136_probes_TMP$Gene_symbol
+GSE144136_Top_table_SV_TMP$Gene_symbol_non_hgnc = NA
+GSE144136_Top_table_SV_TMP$Tissue = GSE144136_pheno_curated$TISSUE[1]
+GSE144136_Top_table_SV_TMP$Tissue_type = "Brain"
+GSE144136_Top_table_SV_TMP$Technology = "scRNA-seq"
+
+write.csv(GSE144136_Top_table_SV_TMP, "GSE144136_results/GSE144136_Top_table_SV.csv")
+
+
 ################### GSE213982 ###################
 
 GSE213982_pheno$TISSUE = "Dorsolateral prefrontal cortex (BA9)"
@@ -5283,6 +6086,62 @@ write.csv(GSE213982_Top_table_no_covar_TMP, "GSE213982_results/GSE213982_Top_tab
 write.csv(GSE213982_Top_table_TMP, "GSE213982_results/GSE213982_Top_table.csv")
 write.csv(GSE213982_Top_table_no_covar_cell_types, "GSE213982_results/GSE213982_Top_table_no_covar_cell_types.csv")
 
+#### Surrogate variable analysis
+GSE213982_count_tmp = GSE144136_GSE213982_counts_mixed[,GSE213982_selection]
+
+# Design matrix
+tmp_design = model.matrix(~ GROUP, data = GSE213982_pheno_curated)
+
+# egeR filter
+GSE213982_tmp_dge = DGEList(counts=GSE213982_count_tmp)
+keep = filterByExpr(GSE213982_tmp_dge, tmp_design)
+GSE213982_tmp_dge = GSE213982_tmp_dge[keep,,keep.lib.sizes=FALSE]
+
+# SV estimation
+GSE213982_tmp_counts = GSE213982_tmp_dge$counts
+num_SV_GSE213982 = sva::num.sv(GSE213982_tmp_counts, tmp_design, method = "leek") # Suggested 34
+num_SV_selected_GSE213982 = min(c(num_SV_GSE213982, 5))
+
+print(paste0("Number of suggested SVs: ", num_SV_GSE213982))
+print(paste0("Number of selected SVs: ", num_SV_selected_GSE213982))
+
+
+mod0_GSE213982 = model.matrix(~1, data= GSE213982_pheno_curated)
+svseq_GSE213982 = svaseq(GSE213982_tmp_counts, 
+                         tmp_design,
+                         mod0_GSE213982,
+                         n.sv=num_SV_selected_GSE213982)
+
+sv_df_GSE213982 = svseq_GSE213982$sv
+tmp_design_full = cbind(tmp_design, sv_df_GSE213982)
+
+# Voom
+GSE213982_tmp_dge = calcNormFactors(GSE213982_tmp_dge)
+GSE213982_tmp_voom = voom(GSE213982_tmp_dge, tmp_design_full, plot=TRUE)
+
+# limma 
+fit = lmFit(GSE213982_tmp_voom, tmp_design_full)
+fitE = eBayes(fit)
+GSE213982_Top_table_SV_TMP = limma::topTable(fit = fitE, coef = 2, adjust.method = "fdr", number = Inf, confint = TRUE)
+GSE213982_Top_table_SV_TMP$ID = rownames(GSE213982_Top_table_SV_TMP)
+# *qt(alpha, df=fitE$df.total) calculate T critical value for confint alpha = 0.975
+
+SE = sqrt(fitE$s2.post) * fit$stdev.unscaled
+SE = SE[,2]
+SE = SE[GSE213982_Top_table_SV_TMP$ID]
+GSE213982_Top_table_SV_TMP$SE = SE
+all(names(SE) == GSE213982_Top_table_SV_TMP$ID) # TRUE
+
+# Annotating results
+GSE213982_probes_TMP = GSE144136_GSE213982_probes
+GSE213982_probes_TMP = GSE213982_probes_TMP[GSE213982_Top_table_SV_TMP$ID, ]
+GSE213982_Top_table_SV_TMP$Gene_symbol = GSE213982_probes_TMP$Gene_symbol
+GSE213982_Top_table_SV_TMP$Gene_symbol_non_hgnc = NA
+GSE213982_Top_table_SV_TMP$Tissue = GSE213982_pheno_curated$TISSUE[1]
+GSE213982_Top_table_SV_TMP$Tissue_type = "Brain"
+GSE213982_Top_table_SV_TMP$Technology = "scRNA-seq"
+
+write.csv(GSE213982_Top_table_SV_TMP, "GSE213982_results/GSE213982_Top_table_SV.csv")
 
 rm(list = ls(pattern = "GSE144136"))
 gc()
