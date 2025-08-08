@@ -79,7 +79,7 @@ library(AnnotationDbi)
 library(org.Hs.eg.db)
 library(RobustRankAggreg)
 
-################### Defining functions ###################
+################### Defining basic functions ###################
 
 # NOT IN operator
 '%!in%' = function(x,y){!('%in%'(x,y))}
@@ -2767,6 +2767,61 @@ run_meta_SJ = function(initial_study_list, blood_df_to_compare){
   return(out_list)
 }
 
+run_single_gene_meta_SJ = function(gene,
+                                   initial_study_list){
+  
+  
+  # Reducing df for meta-analysis
+  print("Aggregating Log2FC and SE per gene per study")
+  
+  initial_study_list_reduced = lapply(initial_study_list, function(x){
+    
+    orig_df = x
+    
+    x = x[!stri_detect_fixed(x$Corrected_symbol, pattern = ";"),]
+    x = x[!is.na(x$Corrected_symbol),]
+    x = x[x$Corrected_symbol != "",]
+    x = x %>% 
+      dplyr::group_by(., Corrected_symbol)%>% 
+      dplyr::summarise(., 
+                       avgLog2FC = mean(logFC), 
+                       maxSE = max(SE))
+    
+    x = dplyr::ungroup(x)
+    x$Tissue = unique(orig_df$Tissue)
+    x$Tissue_type = unique(orig_df$Tissue_type)
+    x$Technology = unique(orig_df$Technology)
+    x$Study = unique(orig_df$Study)
+    x = as.data.frame(x)
+    return(x)
+  })
+  
+  initial_study_list_reduced = do.call(rbind, initial_study_list_reduced)
+  unique_genes_meta = unique(initial_study_list_reduced$Corrected_symbol)
+  
+  print("Running meta-analysis for gene")
+    
+    
+  # meta df
+  tmp_df_genes = initial_study_list_reduced[initial_study_list_reduced$Corrected_symbol == gene,]
+  tmp_cohorts_up = length(tmp_df_genes$avgLog2FC[tmp_df_genes$avgLog2FC > 0])
+  tmp_cohorts_down = length(tmp_df_genes$avgLog2FC[tmp_df_genes$avgLog2FC < 0])
+  cohorts_total = nrow(tmp_df_genes)
+  
+  
+  if (cohorts_total < 5){
+    print("N cohorts < 5")
+  } else {
+    
+    tmp_meta_model = rma.uni(yi = avgLog2FC, 
+                             vi = maxSE^2, 
+                             data = tmp_df_genes, 
+                             method = "SJ", 
+                             weighted = TRUE)
+    
+    print(summary(tmp_meta_model))
+  }
+}
 
 run_meta_REML = function(initial_study_list, blood_df_to_compare){
   
@@ -4249,8 +4304,604 @@ grid.arrange(grobs = image_grobs[1:3], ncol = 3)
 dev.off()
 
 ################### Moderator analysis for RE with SJ ###################
+cohort_moderators_data = openxlsx::read.xlsx("Cohort_moderators.xlsx")
+colnames(cohort_moderators_data)[1] = "Study"
+cohort_moderators_data = cohort_moderators_data[cohort_moderators_data$Study != "GSE66937", ]
+
+cohort_moderators_data$Platform_binary = factor(cohort_moderators_data$Platform_binary, levels = c( "Array", "RNAseq"))
+cohort_moderators_data$Primary_tissue_group = factor(cohort_moderators_data$Primary_tissue_group, 
+                                                     levels = c( "Cortical", "Non_cortical")) # Better to stratify
 
 
+# Moderators to include
+cohort_moderators_data$Platform_binary
+cohort_moderators_data$Mean_PMI_hours
+cohort_moderators_data$Percent_male
+cohort_moderators_data$Percent_Depr
+cohort_moderators_data$Percent_BD
+cohort_moderators_data$Percent_SCZ
+
+# Check
+all(cohort_moderators_data$Study %in% combined_df_no_covar$Study) # TRUE
+
+run_meta_SJ_moderated = function(initial_study_list, 
+                                 moderator_df,
+                                 moderator_names){
+  
+  
+  # Reducing df for meta-analysis
+  print("Aggregating Log2FC and SE per gene per study")
+  initial_study_list_reduced = lapply(initial_study_list, function(x){
+    
+    orig_df = x
+    
+    x = x[!stri_detect_fixed(x$Corrected_symbol, pattern = ";"),]
+    x = x[!is.na(x$Corrected_symbol),]
+    x = x[x$Corrected_symbol != "",]
+    x = x %>% 
+      dplyr::group_by(., Corrected_symbol)%>% 
+      dplyr::summarise(., 
+                       avgLog2FC = mean(logFC), 
+                       maxSE = max(SE))
+    
+    x = dplyr::ungroup(x)
+    x$Tissue = unique(orig_df$Tissue)
+    x$Tissue_type = unique(orig_df$Tissue_type)
+    x$Technology = unique(orig_df$Technology)
+    x$Study = unique(orig_df$Study)
+    x = as.data.frame(x)
+    
+    return(x)
+  })
+  initial_study_list_reduced = do.call(rbind, initial_study_list_reduced)
+  unique_genes_meta = unique(initial_study_list_reduced$Corrected_symbol)
+  
+  print("Running meta-analysis per gene with moderators")
+  meta_analysis_list = mclapply(unique_genes_meta, function(x){
+    
+    
+    # meta df
+    tmp_df_genes = initial_study_list_reduced[initial_study_list_reduced$Corrected_symbol == x,]
+    
+    # Adding moderators
+    tmp_df_genes = inner_join(tmp_df_genes, moderator_df)
+    tmp_cohorts_up = length(tmp_df_genes$avgLog2FC[tmp_df_genes$avgLog2FC > 0])
+    tmp_cohorts_down = length(tmp_df_genes$avgLog2FC[tmp_df_genes$avgLog2FC < 0])
+    cohorts_total = nrow(tmp_df_genes)
+    
+    if (cohorts_total < 10){
+      return(NA)
+    }
+    
+    moderator_string = paste0(moderator_names, collapse = " + ")
+    moderator_string = paste0("~ ", moderator_string)
+    
+    
+    tmp_meta_model = rma.uni(yi = avgLog2FC, 
+                             vi = maxSE^2, 
+                             data = tmp_df_genes, 
+                             method = "SJ",
+                             mods = as.formula(moderator_string),
+                             weighted = TRUE)
+    
+    tmp_meta_model_estimates = tmp_meta_model$b
+    tmp_meta_model_estimates = t(tmp_meta_model_estimates)
+    tmp_meta_model_estimates = as.data.frame(tmp_meta_model_estimates)
+    
+    tmp_meta_model_pvals = tmp_meta_model$pval
+    tmp_meta_model_pvals = as.data.frame(tmp_meta_model_pvals)
+    tmp_meta_model_pvals = t(tmp_meta_model_pvals)
+    
+    colnames(tmp_meta_model_pvals) = paste0("pval_", colnames(tmp_meta_model_estimates))
+    colnames(tmp_meta_model_estimates) = paste0("beta_", colnames(tmp_meta_model_estimates))
+    
+    
+    leading_row = data.frame(
+      gene = x,
+      detected_cohorts = cohorts_total,
+      cohorts_up = tmp_cohorts_up,
+      cohorts_down = tmp_cohorts_down,
+      commentary = "Number of cohorts >= 10: gene is analyzed")
+    
+    estimate_row = cbind(tmp_meta_model_estimates, tmp_meta_model_pvals)
+    full_row = cbind(leading_row, estimate_row)
+    
+    full_row$tau2 = tmp_meta_model$tau2
+    full_row$I2 = tmp_meta_model$I2
+    full_row$H2 = tmp_meta_model$H2
+    full_row$Q = tmp_meta_model$QE
+    full_row$Q.p = tmp_meta_model$QEp
+    full_row$QM = tmp_meta_model$QM
+    full_row$QM.p = tmp_meta_model$QMp
+    full_row$R2 =  tmp_meta_model$R2
+    
+    return(full_row)
+    
+  }, mc.cores = 9)
+  
+  #print(meta_analysis_list)
+  
+  meta_analysis_list = meta_analysis_list[sapply(meta_analysis_list, is.data.frame)]
+  meta_analysis_df = do.call(rbind, meta_analysis_list)
+  rownames(meta_analysis_df) = NULL
+  rm(list = ls(pattern = "tmp_"))
+  out_list = list()
+  out_list[[1]] = meta_analysis_df
+  out_list[[2]] = initial_study_list_reduced
+  names(out_list) = c("meta_analysis_df", "initial_study_list_reduced")
+  
+  return(out_list)
+}
+
+
+run_single_gene_meta_SJ_moderated = function(gene,
+                                      initial_study_list, 
+                                      moderator_df,
+                                      moderator_names){
+  
+  
+  # Reducing df for meta-analysis
+  print("Aggregating Log2FC and SE per gene per study")
+  initial_study_list_reduced = lapply(initial_study_list, function(x){
+    
+    orig_df = x
+    
+    x = x[!stri_detect_fixed(x$Corrected_symbol, pattern = ";"),]
+    x = x[!is.na(x$Corrected_symbol),]
+    x = x[x$Corrected_symbol != "",]
+    x = x %>% 
+      dplyr::group_by(., Corrected_symbol)%>% 
+      dplyr::summarise(., 
+                       avgLog2FC = mean(logFC), 
+                       maxSE = max(SE))
+    
+    x = dplyr::ungroup(x)
+    x$Tissue = unique(orig_df$Tissue)
+    x$Tissue_type = unique(orig_df$Tissue_type)
+    x$Technology = unique(orig_df$Technology)
+    x$Study = unique(orig_df$Study)
+    x = as.data.frame(x)
+    
+    return(x)
+  })
+  initial_study_list_reduced = do.call(rbind, initial_study_list_reduced)
+  unique_genes_meta = unique(initial_study_list_reduced$Corrected_symbol)
+  
+  print("Running meta-analysis for gene with moderators")
+    
+  # meta df
+  tmp_df_genes = initial_study_list_reduced[initial_study_list_reduced$Corrected_symbol == gene,]
+  
+  # Adding moderators
+  tmp_df_genes = inner_join(tmp_df_genes, moderator_df)
+  tmp_cohorts_up = length(tmp_df_genes$avgLog2FC[tmp_df_genes$avgLog2FC > 0])
+  tmp_cohorts_down = length(tmp_df_genes$avgLog2FC[tmp_df_genes$avgLog2FC < 0])
+  cohorts_total = nrow(tmp_df_genes)
+  
+  if (cohorts_total < 10){
+    return(NA)
+  }
+  
+  moderator_string = paste0(moderator_names, collapse = " + ")
+  moderator_string = paste0("~ ", moderator_string)
+  
+  
+  tmp_meta_model = rma.uni(yi = avgLog2FC, 
+                           vi = maxSE^2, 
+                           data = tmp_df_genes, 
+                           method = "SJ",
+                           mods = as.formula(moderator_string),
+                           weighted = TRUE)
+  
+  print(summary(tmp_meta_model))
+  
+}
+
+
+# Moderated all brain (no covar)
+MODERATED_analysis_all_brain_no_covar = run_meta_SJ_moderated(
+  initial_study_list = combined_df_no_covar_meta_full_list,
+  moderator_df = cohort_moderators_data,
+  moderator_names = c("Platform_binary", "Mean_PMI_hours",
+                      "Percent_male", "Percent_Depr", 
+                      "Percent_BD", "Percent_SCZ")
+)
+MODERATED_analysis_all_brain_no_covar = MODERATED_analysis_all_brain_no_covar[[1]]
+
+# Moderated cortical (no covar)
+MODERATED_analysis_cortical_no_covar = run_meta_SJ_moderated(
+  initial_study_list = combined_df_no_covar_meta_cortical_list,
+  moderator_df = cohort_moderators_data,
+  moderator_names = c("Platform_binary", "Mean_PMI_hours",
+                      "Percent_male", "Percent_Depr", 
+                      "Percent_BD", "Percent_SCZ")
+)
+MODERATED_analysis_cortical_no_covar = MODERATED_analysis_cortical_no_covar[[1]]
+
+
+# Moderated all brain (with covar)
+MODERATED_analysis_all_brain_with_covar = run_meta_SJ_moderated(
+  initial_study_list = combined_df_with_covar_meta_full_list,
+  moderator_df = cohort_moderators_data,
+  moderator_names = c("Platform_binary", "Mean_PMI_hours",
+                      "Percent_male", "Percent_Depr", 
+                      "Percent_BD", "Percent_SCZ")
+)
+MODERATED_analysis_all_brain_with_covar = MODERATED_analysis_all_brain_with_covar[[1]]
+
+# Moderated cortical (with covar)
+MODERATED_analysis_cortical_with_covar = run_meta_SJ_moderated(
+  initial_study_list = combined_df_with_covar_meta_cortical_list,
+  moderator_df = cohort_moderators_data,
+  moderator_names = c("Platform_binary", "Mean_PMI_hours",
+                      "Percent_male", "Percent_Depr", 
+                      "Percent_BD", "Percent_SCZ")
+)
+MODERATED_analysis_cortical_with_covar = MODERATED_analysis_cortical_with_covar[[1]]
+
+
+# Moderated all brain (SV)
+MODERATED_analysis_all_brain_SV = run_meta_SJ_moderated(
+  initial_study_list = combined_df_SV_meta_full_list,
+  moderator_df = cohort_moderators_data,
+  moderator_names = c("Platform_binary", "Mean_PMI_hours",
+                      "Percent_male", "Percent_Depr", 
+                      "Percent_BD", "Percent_SCZ")
+)
+MODERATED_analysis_all_brain_SV = MODERATED_analysis_all_brain_SV[[1]]
+
+# Moderated cortical (SV)
+MODERATED_analysis_cortical_SV = run_meta_SJ_moderated(
+  initial_study_list = combined_df_SV_meta_cortical_list,
+  moderator_df = cohort_moderators_data,
+  moderator_names = c("Platform_binary", "Mean_PMI_hours",
+                      "Percent_male", "Percent_Depr", 
+                      "Percent_BD", "Percent_SCZ")
+)
+MODERATED_analysis_cortical_SV = MODERATED_analysis_cortical_SV[[1]]
+
+# Cortical correlations
+cor.test(MODERATED_analysis_cortical_no_covar$beta_Percent_BD, 
+         MODERATED_analysis_cortical_no_covar$beta_Percent_Depr,
+         method = "spearman") # 0.8973387; p-value < 2.2e-16
+
+cor.test(MODERATED_analysis_cortical_no_covar$pval_Percent_BD, 
+         MODERATED_analysis_cortical_no_covar$pval_Percent_Depr,
+         method = "spearman") # 0.759319; p-value < 2.2e-16
+
+cor.test(MODERATED_analysis_cortical_no_covar$pval_Percent_BD, 
+         MODERATED_analysis_cortical_no_covar$pval_Percent_SCZ,
+         method = "spearman") # 0.92253; p-value < 2.2e-16
+
+cor.test(MODERATED_analysis_cortical_with_covar$pval_Percent_BD, 
+         MODERATED_analysis_cortical_with_covar$pval_Percent_Depr,
+         method = "spearman") # 0.9211632; p-value < 2.2e-16
+
+cor.test(MODERATED_analysis_cortical_with_covar$pval_Percent_BD, 
+         MODERATED_analysis_cortical_with_covar$pval_Percent_SCZ,
+         method = "spearman") # 0.9226585; p-value < 2.2e-16
+
+cor.test(MODERATED_analysis_cortical_SV$pval_Percent_BD, 
+         MODERATED_analysis_cortical_SV$pval_Percent_Depr,
+         method = "spearman") # 0.803596; p-value < 2.2e-16
+
+# All brain correlations
+cor.test(MODERATED_analysis_all_brain_no_covar$beta_Percent_BD, 
+         MODERATED_analysis_all_brain_no_covar$beta_Percent_Depr,
+         method = "spearman") # 0.6970274 ; p-value < 2.2e-16
+
+cor.test(MODERATED_analysis_all_brain_no_covar$pval_Percent_BD, 
+         MODERATED_analysis_all_brain_no_covar$pval_Percent_Depr,
+         method = "spearman") # 0.6737465 ; p-value < 2.2e-16
+
+cor.test(MODERATED_analysis_all_brain_no_covar$pval_Percent_BD, 
+         MODERATED_analysis_all_brain_no_covar$pval_Percent_SCZ,
+         method = "spearman") # 0.6448073; p-value < 2.2e-16
+
+cor.test(MODERATED_analysis_all_brain_with_covar$pval_Percent_BD, 
+         MODERATED_analysis_all_brain_with_covar$pval_Percent_Depr,
+         method = "spearman") # 0.6958896; p-value < 2.2e-16
+
+cor.test(MODERATED_analysis_all_brain_with_covar$pval_Percent_BD, 
+         MODERATED_analysis_all_brain_with_covar$pval_Percent_SCZ,
+         method = "spearman") # 0.574108; p-value < 2.2e-16
+
+cor.test(MODERATED_analysis_all_brain_SV$pval_Percent_BD, 
+         MODERATED_analysis_all_brain_SV$pval_Percent_Depr,
+         method = "spearman") # 0.6541848; p-value < 2.2e-16
+
+# Plots
+dir.create("moderator_correlations")
+plot_moderator_correlation = function(moderated_meta_df,
+                                      variable_1,
+                                      variable_2,
+                                      title,
+                                      label_1, 
+                                      label_2,
+                                      path_to_save,
+                                      color_dots){
+  
+  
+  
+  # Rename variables
+  var_num_1 = which(colnames(moderated_meta_df) == variable_1)
+  var_num_2 = which(colnames(moderated_meta_df) == variable_2)
+  
+  colnames(moderated_meta_df)[var_num_1] = "Corr_variable_1"
+  colnames(moderated_meta_df)[var_num_2] = "Corr_variable_2"
+  
+  
+  # Run correlations
+  n_genes = nrow(moderated_meta_df)
+  cor_spearman = cor.test(moderated_meta_df$Corr_variable_1, moderated_meta_df$Corr_variable_2, method = "spearman")$estimate
+  cor_pearson = cor.test(moderated_meta_df$Corr_variable_1, moderated_meta_df$Corr_variable_2, method = "pearson")$estimate
+  cor_spearman = round(cor_spearman, digits = 2)
+  cor_pearson = round(cor_pearson, digits = 2)
+  
+  
+  caption = paste0("Genes: ", n_genes, "\n",
+                   "R (Pearson): ", cor_pearson, "\n",
+                   "R (Spearman): ", cor_spearman)
+  
+  # Generate plot
+  meta_cor_plot = ggplot(data = moderated_meta_df, aes(x = Corr_variable_1, y = Corr_variable_2)) +
+    geom_point(alpha = .5, col = color_dots, size = 1.5) +
+    labs(title=title,
+         x = label_1, 
+         y = label_2,
+         caption=caption) +
+    
+    # Custom the theme:
+    theme( 
+      legend.position="none",
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(size = 0.1, linetype = 2, color =  "black"),
+      panel.grid.major.y = element_line(size = 0.1, linetype = 2, color =  "black"),
+      axis.line = element_line(size = 1, linetype = 1, color =  "black"),
+      panel.background = element_blank(),
+      plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
+      axis.text.x = element_text(size = 12),
+      axis.text.y = element_text(size = 12),
+      axis.title.x = element_text(size = 14, face = "bold"),
+      axis.title.y = element_text(size = 14, face = "bold"),
+      plot.caption = element_text(size = 12),
+    )
+  ggsave(file = path_to_save, plot = meta_cor_plot, width=3000, height=2560, units = "px", scale = 1)
+}
+
+plot_moderator_correlation(moderated_meta_df=MODERATED_analysis_all_brain_no_covar,
+                           variable_1 = "beta_Percent_Depr",
+                           variable_2 = "beta_Percent_BD",
+                           title = expression("Correlations of " * beta ~ " % Depression and " * beta ~ " % BD in all brain"),
+                           label_1 =  expression(beta ~ " % depression"),
+                           label_2 =  expression(beta ~ " % BD"),
+                           path_to_save = "moderator_correlations/depr_vs_BD_all_brain.png",
+                           color_dots = "darkgreen")
+
+plot_moderator_correlation(moderated_meta_df=MODERATED_analysis_cortical_no_covar,
+                           variable_1 = "beta_Percent_Depr",
+                           variable_2 = "beta_Percent_BD",
+                           title = expression("Correlations of " * beta ~ " % Depression and " * beta ~ " % BD in cortical"),
+                           label_1 =  expression(beta ~ " % depression"),
+                           label_2 =  expression(beta ~ " % BD"),
+                           path_to_save = "moderator_correlations/depr_vs_BD_cortical.png",
+                           color_dots = "#AA4A44")
+
+plot_moderator_correlation(moderated_meta_df=MODERATED_analysis_cortical_no_covar,
+                           variable_1 = "beta_Percent_Depr",
+                           variable_2 = "beta_Percent_SCZ",
+                           title = expression("Correlations of " * beta ~ " % Depression and " * beta ~ " % SCZ in cortical"),
+                           label_1 =  expression(beta ~ " % depression"),
+                           label_2 =  expression(beta ~ " % SCZ"),
+                           path_to_save = "moderator_correlations/depr_vs_SCZ_cortical.png",
+                           color_dots = "#00008B")
+
+
+#### Generate combined image for moderators
+images_in_folder = list.files("moderator_correlations", full.names = TRUE)
+image_list  =  lapply(images_in_folder, png::readPNG)
+image_grobs = lapply(image_list, grid::rasterGrob)
+combined_file_name = paste0("Figure_S_Moderator_correlations.png")
+height = nrow(image_list[[1]])
+width = ncol(image_list[[1]])
+
+spacer = rectGrob(gp=gpar(col=NA, fill=NA))
+image_grobs_modif = list(
+  
+  image_grobs[[1]], image_grobs[[2]], image_grobs[[3]]
+)
+
+
+# generating PNG
+png(filename = combined_file_name, units = "px", width = width*3, height = height*1)
+grid.arrange(grobs = image_grobs[1:3], ncol = 3)
+dev.off()
+
+
+# Generate moderator tables for selected genes
+list_of_moderated_analyses = list(
+  MODERATED_analysis_all_brain_no_covar,
+  MODERATED_analysis_cortical_no_covar,
+  MODERATED_analysis_all_brain_with_covar,
+  MODERATED_analysis_cortical_with_covar,
+  MODERATED_analysis_all_brain_SV,
+  MODERATED_analysis_cortical_SV
+)
+
+list_of_significant_genes_from_ma = list(
+  meta_no_covar_all_brain_signif,
+  meta_no_covar_cortical_signif,
+  meta_with_covar_all_brain_signif,
+  meta_with_covar_cortical_signif,
+  meta_SV_all_brain_signif,
+  meta_SV_cortical_signif
+)
+
+filtered_moderator_results = mapply(function(mod_df, meta_df){
+  
+  meta_df = dplyr::arrange(meta_df, -meta_LFc)
+  meta_df = meta_df[meta_df$gene %in% mod_df$gene, ]
+  
+  rownames(mod_df) = mod_df$gene
+  mod_df = mod_df[meta_df$gene, ]
+  
+  att_1 = meta_df[, c("gene", "meta_LFc", "meta_pval")]
+  colnames(att_1) = c("gene", "init_meta_logFC", "init_meta_pval")
+  att_2 = mod_df
+  att_2$gene = NULL
+  
+  comb_df = cbind(att_1, att_2)
+  
+  return(comb_df)
+  
+}, list_of_moderated_analyses, list_of_significant_genes_from_ma, SIMPLIFY = FALSE)
+
+names(filtered_moderator_results) = c(
+  "Mod. for all brain (no covar) p (meta) <0.05",
+  "Mod. for cortical (no covar) p (meta) <0.05",
+  "Mod. for all brain (with covar) p (meta) <0.05",
+  "Mod. for cortical (with covar) p (meta) <0.05",
+  "Mod. for all brain (SV) p (meta) <0.05",
+  "Mod. for cortical (SV) p (meta) <0.05"
+)
+
+
+run_single_gene_meta_SJ_moderated(gene="P2RY12",
+                                  initial_study_list = combined_df_no_covar_meta_full_list,
+                                  moderator_df = cohort_moderators_data,
+                                  moderator_names = c("Platform_binary", "Mean_PMI_hours",
+                                               "Percent_male", "Percent_Depr", 
+                                               "Percent_BD", "Percent_SCZ"))
+run_single_gene_meta_SJ(gene="P2RY12",
+                        initial_study_list = combined_df_no_covar_meta_full_list)
+
+# Run explanations for models
+explain_moderators = function(moder_df, df_name){
+  
+  genes_one_signif = moder_df %>%
+    filter(., pval_Platform_binaryRNAseq < 0.05 | pval_Mean_PMI_hours < 0.05 | pval_Percent_male < 0.05 | pval_Percent_Depr < 0.05 | pval_Percent_BD < 0.05 | pval_Percent_SCZ < 0.05) %>%
+    pull(gene) %>%
+    length(.) %>%
+    paste0("N genes where at least one moderator was significant (p<0.05):", .)
+  
+  
+  genes_signif_platform = moder_df %>%
+    filter(., pval_Platform_binaryRNAseq < 0.05) %>%
+    arrange(., pval_Platform_binaryRNAseq) %>%
+    mutate(gene_with_effect = paste0(gene, " (", round(beta_Platform_binaryRNAseq, 2), ")")) %>%
+    pull(gene_with_effect) %>%
+    head(., 10) %>%
+    paste0(collapse="; ")  %>%
+    paste0("Top 10 (or less) genes where effect size was related to platform (p<0.05):", .)
+  
+  genes_signif_PMI = moder_df %>%
+    filter(., pval_Mean_PMI_hours < 0.05) %>%
+    arrange(., pval_Mean_PMI_hours) %>%
+    mutate(gene_with_effect = paste0(gene, " (", round(beta_Mean_PMI_hours, 2), ")")) %>%
+    pull(gene_with_effect) %>%
+    head(., 10) %>%
+    paste0(collapse="; ")  %>%
+    paste0("Top 10 (or less) genes where effect size was related to mean PMI (p<0.05):", .)
+  
+  genes_signif_percent_male = moder_df %>%
+    filter(., pval_Percent_male < 0.05) %>%
+    arrange(., pval_Percent_male) %>%
+    mutate(gene_with_effect = paste0(gene, " (", round(beta_Percent_male, 2), ")")) %>%
+    pull(gene_with_effect) %>%
+    head(., 10) %>%
+    paste0(collapse="; ")  %>%
+    paste0("Top 10 (or less) genes where effect size was related to % of male (p<0.05):", .) 
+  
+  genes_signif_percent_depr = moder_df %>%
+    filter(., pval_Percent_Depr < 0.05) %>%
+    arrange(., pval_Percent_Depr) %>%
+    mutate(gene_with_effect = paste0(gene, " (", round(beta_Percent_Depr, 2), ")")) %>%
+    pull(gene_with_effect) %>%
+    head(., 10) %>%
+    paste0(collapse="; ")  %>%
+    paste0("Top 10 (or less) genes where effect size was related to % of depression (p<0.05):", .) 
+  
+  genes_signif_percent_BD = moder_df %>%
+    filter(., pval_Percent_BD < 0.05) %>%
+    arrange(., pval_Percent_BD) %>%
+    mutate(gene_with_effect = paste0(gene, " (", round(beta_Percent_BD, 2), ")")) %>%
+    pull(gene_with_effect) %>%
+    head(., 10) %>%
+    paste0(collapse="; ")  %>%
+    paste0("Top 10 (or less) genes where effect size was related to % of BD (p<0.05):", .) 
+  
+  genes_signif_percent_SCZ = moder_df %>%
+    filter(., pval_Percent_SCZ < 0.05) %>%
+    arrange(., pval_Percent_SCZ) %>%
+    mutate(gene_with_effect = paste0(gene, " (", round(beta_Percent_SCZ, 2), ")")) %>%
+    pull(gene_with_effect) %>%
+    head(., 10) %>%
+    paste0(collapse="; ")  %>%
+    paste0("Top 10 (or less) genes where effect size was related to % of SCZ (p<0.05):", .) 
+  
+  average_R2 = moder_df %>%
+    pull(R2) %>%
+    mean(.) %>%
+    paste0("Mean R2 for a gene subset:", .) 
+  
+  separator_small = "\n\n"
+  separator_large = "\n\n\n\n"
+  
+  
+  output = c(df_name,
+             separator_small,
+             genes_one_signif,
+             separator_small,
+             genes_signif_platform,  
+             separator_small,
+             genes_signif_PMI,
+             separator_small,
+             genes_signif_percent_male,
+             separator_small,
+             genes_signif_percent_depr,
+             separator_small,
+             genes_signif_percent_BD,
+             separator_small,
+             genes_signif_percent_SCZ,
+             separator_small,
+             average_R2,
+             separator_large)
+  output = paste0(output, collapse = "")
+  return(output)
+}
+
+stats_moderator_analysis = vector()
+
+for (i in 1:length(filtered_moderator_results)){
+  message = explain_moderators(filtered_moderator_results[[i]], names(filtered_moderator_results)[i])
+  stats_moderator_analysis = c(stats_moderator_analysis, message)
+}
+
+writeLines(text = stats_moderator_analysis, con = "Stats_moderator_analysis.txt")
+
+# Save moderators as Excel
+short_names = c(
+  "Mod. all (no cov) p(met)<0.05",
+  "Mod. cort (no cov) p(met)<0.05",
+  "Mod. all (cov) p(met)<0.05",
+  "Mod. cort (cov) p(met)<0.05",
+  "Mod. all (SV) p(met)<0.05",
+  "Mod. cortical (SV) p(met)<0.05"
+)
+
+wb = createWorkbook()
+for (i in 1:6) {
+  # Add a new worksheet with the sheet name
+  addWorksheet(wb, short_names[i])
+  
+  # Write the data frame to the worksheet
+  writeData(wb, sheet = short_names[i], filtered_moderator_results[[i]])
+  
+  # Adjust column widths to fit the text
+  setColWidths(wb, sheet = short_names[i], cols = 1:ncol(filtered_moderator_results[[i]]), widths = "auto")
+}
+
+saveWorkbook(wb, "Moderator_analysis_results.xlsx", overwrite = TRUE)
 
 ################### Renaming function for meta-analyses ###################
 
@@ -4740,25 +5391,40 @@ for (i in het_dfs_meta){
 }
 
 het_dfs_meta = lapply(het_dfs_meta, function(x){
+  
   df = get(x)
   stats_on_meta = summary(df$I2)
   names_of_stats = names(stats_on_meta)
   stats_on_meta = as.numeric(stats_on_meta)
   names(stats_on_meta) = names_of_stats
+  
+  stats_on_meta_2 = summary(df$tau2)
+  names_of_stats_2 = names(stats_on_meta_2)
+  stats_on_meta_2 = as.numeric(stats_on_meta_2)
+  names(stats_on_meta_2) = names_of_stats_2
+  
   out_df = data.frame(
     name=label_vector[x],
     minimal_I2 = stats_on_meta["Min."],
     median_I2 = stats_on_meta["Median"],
-    maximal_I2 = stats_on_meta["Max."]
+    maximal_I2 = stats_on_meta["Max."],
+    minimal_tau2 = stats_on_meta_2["Min."],
+    median_tau2 = stats_on_meta_2["Median"],
+    maximal_tau2 = stats_on_meta_2["Max."]
+    
   )
   return(out_df)
 })
+
 het_dfs_meta = do.call(rbind, het_dfs_meta)
 colnames(het_dfs_meta) = c(
   "Analysis",
   "Min. I2",
   "Med. I2",
-  "Max. I2"
+  "Max. I2",
+  "Min. tau2",
+  "Med. tau2",
+  "Max. tau2"
 )
 
 wb = createWorkbook()
@@ -4809,9 +5475,17 @@ meta_list_SV_signif = list(
 suas_genes_PSY = c("PLA2G10", "RBKS", "CCL27", "ASRG1", "WWP2")
 meta_no_covar_all_brain[meta_no_covar_all_brain$gene %in% suas_genes_PSY,]
 meta_with_covar_all_brain[meta_with_covar_all_brain$gene %in% suas_genes_PSY,]
+meta_SV_all_brain[meta_SV_all_brain$gene %in% suas_genes_PSY,]
 blood_df_no_covar[blood_df_no_covar$Corrected_symbol %in% suas_genes_PSY,]
 blood_df_with_covar[blood_df_with_covar$Corrected_symbol %in% suas_genes_PSY,]
-# None are validated in full analyses and in blood
+
+meta_no_covar_cortical[meta_no_covar_cortical$gene %in% suas_genes_PSY,]
+meta_with_covar_cortical[meta_with_covar_cortical$gene %in% suas_genes_PSY,]
+meta_SV_cortical[meta_SV_cortical$gene %in% suas_genes_PSY,]
+
+meta_no_covar_prefrontal[meta_no_covar_prefrontal$gene %in% suas_genes_PSY,]
+meta_with_covar_prefrontal[meta_with_covar_prefrontal$gene %in% suas_genes_PSY,]
+meta_SV_prefrontal[meta_SV_prefrontal$gene %in% suas_genes_PSY,]
 
 ################### Stats on matching with blood ###################
 
@@ -5621,6 +6295,128 @@ mean(b-a)
 a = c(58.85, 45.35, 42.44)
 b = c(46.55, 54.55, 57.14)
 mean(b-a)
+
+################### Comparison with genetic background ###################
+# https://pmc.ncbi.nlm.nih.gov/articles/PMC10603363/#SD3
+gwas_SMR_sumary = openxlsx::read.xlsx("suicide_GWAS/NIHMS1937255-supplement-Supplementary_Tables.xlsx", sheet = "S17", startRow = 3)
+gwas_SMR_sumary = gwas_SMR_sumary[!is.na(gwas_SMR_sumary$Probe.ID),]
+gwas_magma_summary = openxlsx::read.xlsx("suicide_GWAS/NIHMS1937255-supplement-Supplementary_Tables.xlsx", sheet = "S13", startRow = 2)
+
+
+# Gene harmonization
+harmoniz_genes_SMR = check_gene_symbol_NIH(PRF_gene_symbols = gwas_SMR_sumary$Gene, 
+                                             PRF_ref_NIH_expanded = Homo_Sapiens_Gene_info_NIH_expanded,
+                                             PRF_replace_NA_with_old = TRUE)
+harmoniz_genes_SMR_dict = harmoniz_genes_SMR$Suggested.Symbol
+names(harmoniz_genes_SMR_dict) = harmoniz_genes_SMR$x
+harmoniz_genes_gm = check_gene_symbol_NIH(PRF_gene_symbols = gwas_magma_summary$SYMBOL, 
+                                           PRF_ref_NIH_expanded = Homo_Sapiens_Gene_info_NIH_expanded,
+                                           PRF_replace_NA_with_old = TRUE)
+harmoniz_genes_gm_dict = harmoniz_genes_gm$Suggested.Symbol
+names(harmoniz_genes_gm_dict) = harmoniz_genes_gm$x
+gwas_SMR_sumary$harmon_symbol = sapply(gwas_SMR_sumary$Gene, function(x) harmoniz_genes_SMR_dict[x])
+gwas_magma_summary$harmon_symbol = sapply(gwas_magma_summary$SYMBOL, function(x) harmoniz_genes_gm_dict[x])
+
+#### Comparison wirh RE meta-analysis
+meta_list_signif_combined = list(
+  "meta_no_covar_all_brain_signif" = meta_no_covar_all_brain_signif,
+  "meta_no_covar_cortical_signif" = meta_no_covar_cortical_signif,
+  "meta_no_covar_prefrontal_signif" = meta_no_covar_prefrontal_signif,
+  "meta_with_covar_all_brain_signif" = meta_with_covar_all_brain_signif,
+  "meta_with_covar_cortical_signif" = meta_with_covar_cortical_signif,
+  "meta_with_covar_prefrontal_signif" = meta_with_covar_prefrontal_signif,
+  "meta_SV_all_brain_signif" = meta_SV_all_brain_signif,
+  "meta_SV_cortical_signif" = meta_SV_cortical_signif,
+  "meta_SV_prefrontal_signif" = meta_SV_prefrontal_signif
+)
+
+signif_genes_any_RE = lapply(meta_list_signif_combined, function(x){
+  x = x[abs(x$meta_LFc) >= 0.2,]
+  genes = x$gene
+  return(genes)
+})
+signif_genes_any_RE = unlist(signif_genes_any_RE)
+signif_genes_any_RE = unique(signif_genes_any_RE)
+
+SMR_GWAS_filtered_results = lapply(meta_list_signif_combined, function(x){
+  x = x[x$Gene %in% gwas_SMR_sumary$harmon_symbol,]
+  return(x)
+})
+magma_GWAS_filtered_results = lapply(meta_list_signif_combined, function(x){
+  x = x[x$Gene %in% gwas_magma_summary$harmon_symbol,]
+  return(x)
+})
+# No matching anywhere
+
+#### Comparison with RRA meta-analysis
+meta_list_signif_combined_RRA = list(
+  "meta_no_covar_all_brain_signif_RRA" = meta_no_covar_all_brain,
+  "meta_no_covar_cortical_signif_RRA" = meta_no_covar_cortical,
+  "meta_no_covar_prefrontal_signif_RRA" = meta_no_covar_prefrontal,
+  "meta_with_covar_all_brain_signif_RRA" = meta_with_covar_all_brain,
+  "meta_with_covar_cortical_signif_RRA" = meta_with_covar_cortical,
+  "meta_with_covar_prefrontal_signif_RRA" = meta_with_covar_prefrontal,
+  "meta_SV_all_brain_signif_RRA" = meta_SV_all_brain,
+  "meta_SV_cortical_signif_RRA" = meta_SV_cortical,
+  "meta_SV_prefrontal_signif_RRA" = meta_SV_prefrontal
+)
+meta_list_signif_combined_RRA = lapply(meta_list_signif_combined_RRA, function(x){
+  x = x %>%
+    filter(., P_RRA < 0.05) %>%
+    arrange(., P_RRA)
+  return(x)
+})
+
+signif_genes_any_RRA = lapply(meta_list_signif_combined_RRA, function(x){
+  x = x[!is.na(x$meta_LFc), ]
+  x = x[abs(x$meta_LFc) >= 0.2,]
+  genes = x$gene
+  return(genes)
+})
+signif_genes_any_RRA = unlist(signif_genes_any_RRA)
+signif_genes_any_RRA = unique(signif_genes_any_RRA)
+
+SMR_GWAS_filtered_result_RRA  = lapply(meta_list_signif_combined_RRA, function(x){
+  x = x[x$Gene %in% gwas_SMR_sumary$harmon_symbol,]
+  return(x)
+})
+magma_GWAS_filtered_results_RRA = lapply(meta_list_signif_combined_RRA, function(x){
+  x = x[x$Gene %in% gwas_magma_summary$harmon_symbol,]
+  return(x)
+})
+# No matching anywhere
+
+
+################### Integration with eQTL and GWAS Catalog ###################
+eQTL_files = list.files(path = "GTEx_Analysis_v10_eQTL_updated", full.names = TRUE)
+eQTL_files = eQTL_files[stri_detect_fixed(eQTL_files, pattern = "Brain")]
+eQTL_files = eQTL_files[stri_detect_fixed(eQTL_files, pattern = "eGenes")]
+eQTL_files = eQTL_files[!stri_detect_fixed(eQTL_files, pattern = "Spinal_cord")]
+
+eQTL_df = lapply(eQTL_files, function(x){
+  tissue_name = stri_replace_all_fixed(x, pattern = "GTEx_Analysis_v10_eQTL_updated/Brain_", replacement = "")
+  tissue_name = unlist(stri_split_fixed(tissue_name, pattern = "."))
+  tissue_name = tissue_name[1]
+  dataset_qtl = smart_fread(x)
+  dataset_qtl$tissue = tissue_name
+  return(dataset_qtl)
+})
+eQTL_df = do.call(rbind, eQTL_df)
+eQTL_df = eQTL_df[eQTL_df$qval<0.05,]
+
+eQTL_df_genes = unique(eQTL_df$gene_name)
+
+# Symbol harmonization
+harmoniz_genes_eQTL = check_gene_symbol_NIH(PRF_gene_symbols = eQTL_df_genes, 
+                                           PRF_ref_NIH_expanded = Homo_Sapiens_Gene_info_NIH_expanded,
+                                           PRF_replace_NA_with_old = TRUE)
+harmoniz_genes_eQTL_dict = harmoniz_genes_eQTL$Suggested.Symbol
+names(harmoniz_genes_eQTL_dict) = harmoniz_genes_eQTL$x
+
+eQTL_df$harmon_symbol = sapply(eQTL_df$gene_name, function(x) harmoniz_genes_eQTL_dict[x])
+
+eQTL_df_filtered_RE_genes = eQTL_df[eQTL_df$harmon_symbol %in% signif_genes_any_RE,]
+eQTL_df_filtered_RRA_genes = eQTL_df[eQTL_df$harmon_symbol %in% signif_genes_any_RRA,]
 
 
 
