@@ -1,3 +1,8 @@
+# Comments
+# This code is intended to be viewed in RStudio and contains appropriate headings
+# "=" symbol was used as an assignment operator
+# Commands for STAR, fast, fastq tools and other command line tool/pythons scripts calls in the terminal is provided here as characters " <command code> " 
+
 setwd("/home/aleksandr/Desktop/WORK/OLINK_suicide_PSY_project/Data_preprocessing_analysis")
 
 # Setting options
@@ -2669,7 +2674,7 @@ and here: https://github.com/alexdobin/STAR
 
 "
 
-# some extra infor on paired-end data
+# some extra info on paired-end data
 "
 # The data was just paired-end instead of single-end, so I had to fastq-dump -split-files the fastq files before I aligned them to the genome. After that, my mapped reads shot up to ~91% as well.
 https://github.com/ncbi/sra-tools/wiki/HowTo:-fasterq-dump

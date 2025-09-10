@@ -1,6 +1,10 @@
-# The script is intended to be run from R studio in interactive mode sequentially
+# The script is intended viewed in R studio
 # Blocks are titled
+# "=" symbol was used as an assignment operator
 # Data processing and DE in initial cohorts is located in another file "Data_preprocessing_analysis/TRANSCRIPT_SUICIDE_PREPR_ANALYSIS_SCRIPT.R"
+# Calculation of cohort-level moderators is located in "Moderator_calculation.R"
+# Cell expression deconvolution tests are located in "Cell_expression_imputation_tests.R"
+# Cell expression deconvolution final runs and analysis are located in "Cell_expression_imputation_analysis.R"
 
 
 setwd("/home/aleksandr/Desktop/WORK/OLINK_suicide_PSY_project")
@@ -3579,32 +3583,6 @@ for (i in 1:6){
   
 }
 
-images_in_folder = list.files("volcano_plots", full.names = TRUE)
-image_list  =  lapply(images_in_folder, png::readPNG)
-image_grobs = lapply(image_list, grid::rasterGrob)
-combined_file_name = paste0("Figure_S1_Volcano_combined_image.png")
-height = nrow(image_list[[1]])
-width = ncol(image_list[[1]])
-
-spacer = rectGrob(gp=gpar(col=NA, fill=NA))
-image_grobs_modif = list(
-  
-  image_grobs[[1]], image_grobs[[2]],
-  spacer, spacer,
-  image_grobs[[3]], image_grobs[[4]], 
-  spacer, spacer,
-  image_grobs[[5]], image_grobs[[6]]
-)
-
-row_heights = unit(c(1, 3, 1, 3, 1),   # Heights for each row
-                    c("null", "inches", "null", "inches", "null"))
-
-# generating PNG
-png(filename = combined_file_name, units = "px", width = width*2, height = height*3)
-grid::grid.newpage()
-gridExtra::grid.arrange(grobs = image_grobs_modif, ncol = 2, heights = row_heights)
-dev.off()
-
 
 ################### Sensitivity analysis ###################
 
@@ -4211,7 +4189,45 @@ for (i in 1:3) {
 saveWorkbook(wb, "Meta_suicide_significant_genes_SV.xlsx", overwrite = TRUE)
 
 
+## Save volcano plots
+# making volcanos in a loop
+joined_list_all_metas_SV = list(
+  meta_SV_all_brain,
+  meta_SV_cortical,
+  meta_SV_prefrontal
+)
+names_for_list_all = c("All brain (SVs)", "Cortical (SVs)", "DLPFC (SVs)")
+
+for (i in 1:3){
+  
+  curr_df = joined_list_all_metas_SV[[i]]
+  plot_path = paste0("volcano_plots/", names_for_list_all[i], ".png")
+  plot_meta_volcano(curr_df, figure_path = plot_path, title = names_for_list_all[i])
+  
+}
+
 ################### Venn diagrams for SVs ###################
+
+meta_list_SV_signif = list(
+  meta_SV_all_brain_signif,
+  meta_SV_cortical_signif,
+  meta_SV_prefrontal_signif
+)
+
+meta_gene_list_overlaps_SV = lapply(meta_list_SV_signif, function(x){
+  x = x$gene
+  return(x)
+})
+
+names(meta_gene_list_overlaps_SV) = c(
+  "All brain",
+  "Cortical regions",
+  "DLPFC"
+)
+
+make_Venn_digram_list(named_list = meta_gene_list_overlaps_SV, palette = 9, plot_full_path = "Venn_SV.pdf")
+
+
 dir.create("analyses_comparison_covar_SV_nothing_venn")
 meta_gene_list_SVs = list(
   meta_no_covar_all_brain_signif,
@@ -4842,7 +4858,7 @@ explain_moderators = function(moder_df, df_name){
   average_R2 = moder_df %>%
     pull(R2) %>%
     mean(.) %>%
-    paste0("Mean R2 for a gene subset:", .) 
+    paste0("Mean R2 for analysis subset: ", .) 
   
   separator_small = "\n\n"
   separator_large = "\n\n\n\n"
@@ -5333,18 +5349,63 @@ dev.off()
 
 # making plots
 dir.create("funnel_plots")
-folder = "funnel_plots/meta_no_covar_all_brain"
-dir.create(folder)
 
-for (i in 1:nrow(meta_no_covar_all_brain_signif)){
+directory_names = c(
+  "meta_no_covar_all_brain",
+  "meta_no_covar_cortical",
+  "meta_no_covar_prefrontal",
+  "meta_with_covar_all_brain",
+  "meta_with_covar_cortical",
+  "meta_with_covar_prefrontal",
+  "meta_SV_all_brain",
+  "meta_SV_cortical",
+  "meta_SV_prefrontal"
+)
+
+mt_reduced_lists = list(
+  combined_df_no_covar_meta_full_list_reduced,
+  combined_df_no_covar_meta_cortical_list_reduced,
+  combined_df_no_covar_meta_prefrontal_list_reduced,
+  combined_df_with_covar_meta_full_list_reduced,
+  combined_df_with_covar_meta_cortical_list_reduced,
+  combined_df_with_covar_meta_prefrontal_list_reduced,
+  combined_df_SV_meta_full_list_reduced,
+  combined_df_SV_meta_cortical_list_reduced,
+  combined_df_SV_meta_prefrontal_list_reduced
+)
+
+mt_signif_lists = list(
+  meta_no_covar_all_brain_signif,
+  meta_no_covar_cortical_signif,
+  meta_no_covar_prefrontal_signif,
+  meta_with_covar_all_brain_signif,
+  meta_with_covar_cortical_signif,
+  meta_with_covar_prefrontal_signif,
+  meta_SV_all_brain_signif,
+  meta_SV_cortical_signif,
+  meta_SV_prefrontal_signif
+)
+
+for (i in 1:length(directory_names)){
   
+  selected_sig_df = mt_signif_lists[[i]]
+  selected_reduced_df = mt_reduced_lists[[i]]
   
-  gene = meta_no_covar_all_brain_signif$gene[i]
-  plot_path =  paste0(folder, "/", gene, "_funnel.pdf")
+  folder = paste0("funnel_plots/", directory_names[i])
   
-  pdf(file = plot_path, width = 10, height = 7)
-  print(plot_funnel_meta_gene(gene_name = gene, meta_df = combined_df_no_covar_meta_full_list_reduced))
-  dev.off()
+  dir.create(folder)
+  
+  for (sub_index in 1:nrow(selected_sig_df)){
+    
+    
+    gene = selected_sig_df$gene[sub_index]
+    plot_path =  paste0(folder, "/", gene, "_funnel.pdf")
+    
+    pdf(file = plot_path, width = 10, height = 7)
+    print(plot_funnel_meta_gene(gene_name = gene, meta_df = selected_reduced_df))
+    dev.off()
+    
+  }
   
 }
 
@@ -5463,6 +5524,12 @@ meta_list_with_covar_signif = list(
   "meta_with_covar_all_brain_signif" = meta_with_covar_all_brain_signif,
   "meta_with_covar_cortical_signif" = meta_with_covar_cortical_signif,
   "meta_with_covar_prefrontal_signif" = meta_with_covar_prefrontal_signif
+)
+
+meta_list_SV = list(
+  "meta_SV_all_brain" = meta_SV_all_brain,
+  "meta_SV_cortical" = meta_SV_cortical,
+  "meta_SV_prefrontal" = meta_SV_prefrontal
 )
 
 meta_list_SV_signif = list(
@@ -6077,103 +6144,9 @@ im.convert("Enrichment_folder/DLPFC_GO_BP_bar.pdf", convert = "convert",output =
 im.convert("Enrichment_folder/DLPFC_GO_CC_bar.pdf", convert = "convert",output = "DLPFC_GO_CC_bar.png", extra.opts="-density 300x300 -units pixelsperinch ")
 
 ################### AI-based classification and stats ###################
-joined_list_significant = c(meta_list_no_covar_signif, meta_list_with_covar_signif)
+joined_list_significant = c(meta_list_no_covar_signif, meta_list_with_covar_signif, meta_list_SV_signif)
 joined_list_significant = lapply(joined_list_significant, function(x){
   x = dplyr::arrange(x, -meta_LFc)
-  return(x)
-})
-unique_significant_genes = lapply(joined_list_significant, function(x){
-  data = x$gene
-  return(data)
-})
-unique_significant_genes = unlist(unique_significant_genes)
-unique_significant_genes = unique(unique_significant_genes)
-unique_significant_genes_concat = paste0(unique_significant_genes, collapse = ";")
-
-split_into_chunks = function(vec, n) {
-  split(vec, ceiling(seq_along(vec) / n))
-}
-
-unique_significant_genes_chunks = split_into_chunks(unique_significant_genes, 300)
-unique_significant_genes_chunks = lapply(unique_significant_genes_chunks, function(x) paste0(x, collapse = ";"))
-unique_significant_genes_chunks = unlist(unique_significant_genes_chunks)
-unique_significant_genes_chunks
-
-# Classification based on ChatGPT o1-preview
-
-prompt_chat =
-"
-You are given the list of human gene names separated by semicolon ; . You need to do the following:
-
-1. Classify the genes using these classes: 
-'Receptor(non-immune)', 
-'Immune receptor', 
-'Cytokine', 
-'Ligand', 
-'Enzyme (non-kinase)',
-'Transcription factor',
-'Kinase',
-'Structural protein', 
-'Non-coding RNA',
-'Pseudogene'
-
-2. Only use scientific literature (papers) or scientific databases to perform classification
-
-3. Give 1 the most suitable class for every gene
-
-4. DON'T SKIP ANY GENES and provide classification for all of them
-
-5. Provide output as CSV in one string where each row is as follows:
-
-gene,class;\n
-
-note there should be a semicolon ; after every gene,class pair
-
-The list of genes: 
-
-"
-prompt_chat_full = paste0(prompt_chat, "\n", unique_significant_genes_chunks)
-
-# Importing data
-
-GPT01_classification = readLines("GPT01_classification.txt")
-GPT01_classification = str_trim(GPT01_classification)
-GPT01_classification = unlist(stri_split_fixed(GPT01_classification, pattern = ";"))
-GPT01_classification = sapply(GPT01_classification, function(x){
-  x = unlist(stri_split_fixed(x, pattern = ","))
-  return(x)
-})
-GPT01_classification = do.call(rbind, GPT01_classification)
-rownames(GPT01_classification) = NULL
-colnames(GPT01_classification) = c("Gene", "GPT01_class")
-GPT01_classification = as.data.frame(GPT01_classification)
-GPT01_classification$Gene = str_trim(GPT01_classification$Gene)
-GPT01_classification$GPT01_class = str_trim(GPT01_classification$GPT01_class)
-table(unique_significant_genes %in% GPT01_classification$Gene) # TRUE 1403
-GPT01_classification = GPT01_classification[GPT01_classification$Gene != "",]
-
-# Extra mapping
-GPT01_classification_unmapped = unique_significant_genes[unique_significant_genes %!in% GPT01_classification$Gene]
-GPT01_classification_unmapped = paste0(GPT01_classification_unmapped, collapse = ";")
-prompt_chat_remapping = paste0(prompt_chat, "\n", GPT01_classification_unmapped)
-writeLines(prompt_chat_remapping)
-
-# Mapping to classes and generating stats
-joined_list_significant = c(meta_list_no_covar_signif, meta_list_with_covar_signif)
-joined_list_significant = lapply(joined_list_significant, function(x){
-  x = dplyr::arrange(x, -meta_LFc)
-  x$GPT01_class = sapply(x$gene, function(symbol){
-    value = GPT01_classification[GPT01_classification$Gene == symbol, "GPT01_class"]
-    return(value)
-  })
-  x$GPT01_class = factor(x$GPT01_class)
-  return(x)
-})
-
-
-joined_list_significant_high_LFc = lapply(joined_list_significant, function(x){
-  x = dplyr::arrange(x, -meta_LFc)
-  x = x[abs(x$meta_LFc) >= 0.2,]
   return(x)
 })
 
@@ -6183,23 +6156,43 @@ names_for_list = c(
   "DLPFC",
   "All brain (covar)",
   "Cortical regions (covar)",
-  "DLPFC (covar)"
+  "DLPFC (covar)",
+  "All brain (SVs)",
+  "Cortical regions (SVs)",
+  "DLPFC (SVs)"
 )
 
-joined_list_significant_high_LFc = lapply(1:6, function(x){
-  df = joined_list_significant_high_LFc[[x]]
+joined_list_significant_high_LFc = lapply(1:length(joined_list_significant), function(x){
+  df = joined_list_significant[[x]]
+  df = df[abs(df$meta_LFc) >= 0.2,]
   df$analysis = names_for_list[x]
   return(df)
 })
 
+unique_significant_genes = lapply(joined_list_significant_high_LFc, function(x){
+  data = x$gene
+  return(data)
+})
+unique_significant_genes = unlist(unique_significant_genes)
+unique_significant_genes = unique(unique_significant_genes)
+writeLines(unique_significant_genes, "unique_significant_genes_for_AI.txt")
+gpt_classified_genes = read.csv("GPT_5_classified_symbols__fixed.csv")
+
+
 stats_high_LFc = do.call(rbind, joined_list_significant_high_LFc)
-stats_high_LFc = as.data.frame(table(stats_high_LFc$GPT01_class, stats_high_LFc$analysis))
+stats_high_LFc$GPT_5_class = sapply(stats_high_LFc$gene, function(x){
+  class =gpt_classified_genes[gpt_classified_genes$gene_symbol == x, "gene_class"]
+  return(class)
+})
+
+
+stats_high_LFc = as.data.frame(table(stats_high_LFc$GPT_5_class, stats_high_LFc$analysis))
+
 colnames(stats_high_LFc) = c("Category", "Analysis", "Freq")
-stats_high_LFc$Category = stri_replace_all_fixed(stats_high_LFc$Category, pattern = "Receptor(non-immune)", replacement = "Receptor (non-immune)")
 
 plot = ggplot(data = stats_high_LFc, aes(x=Analysis, y = Freq, fill = Category)) +
   geom_col(position = position_dodge(width = 0.8), width = 0.6, col = "black", size = 0.25) +
-  labs(y = "Gene count", x = "Analysis type", fill = "Gene category (GPTo1 preview)", title = "Gene categories with abs(logFC)>=0.2") +
+  labs(y = "Gene count", x = "Analysis type", fill = "Gene category (GPT-5)", title = "Gene categories with abs(logFC)>=0.2") +
   scale_fill_brewer(palette = "Set3") +
   geom_text(aes(label = Freq), position = position_dodge(width = 0.8), vjust = -0.5, size = 3, family = "Times") +
   theme(
@@ -6214,23 +6207,31 @@ plot = ggplot(data = stats_high_LFc, aes(x=Analysis, y = Freq, fill = Category))
     legend.text = element_text(family = "Times", color = "#5d5d5d")
   )
   
-ggsave(file = "stats_high_LFc.pdf", plot = plot, width = 20, height = 15, units = "cm")
+ggsave(file = "stats_high_LFc.pdf", plot = plot, width = 22, height = 12, units = "cm")
 
 
 ################### Saving processed files ###################
+joined_list_significant = c(meta_list_no_covar_signif, meta_list_with_covar_signif, meta_list_SV_signif)
+joined_list_significant = lapply(joined_list_significant, function(x){
+  x = dplyr::arrange(x, -meta_LFc)
+  return(x)
+})
+
 names_for_list = c(
   "All brain",
   "Cortical regions",
   "DLPFC",
   "All brain (covar)",
   "Cortical regions (covar)",
-  "DLPFC (covar)"
+  "DLPFC (covar)",
+  "All brain (SVs)",
+  "Cortical regions (SVs)",
+  "DLPFC (SVs)"
 )
-names(joined_list_significant)
 
 wb = createWorkbook()
 
-for (i in 1:6) {
+for (i in 1:length(joined_list_significant)) {
   # Add a new worksheet with the sheet name
   addWorksheet(wb, names_for_list[i])
   
@@ -6244,20 +6245,23 @@ for (i in 1:6) {
 saveWorkbook(wb, "Meta_suicide_significant_genes.xlsx", overwrite = TRUE)
 
 ################### Saving full files ###################
-joined_list_meta_all_data = c(meta_list_no_covar, meta_list_with_covar)
+joined_list_meta_all_data = c(meta_list_no_covar, meta_list_with_covar, meta_list_SV)
 names_for_list = c(
   "All brain",
   "Cortical regions",
   "DLPFC",
   "All brain (covar)",
   "Cortical regions (covar)",
-  "DLPFC (covar)"
+  "DLPFC (covar)",
+  "All brain (SVs)",
+  "Cortical regions (SVs)",
+  "DLPFC (SVs)"
 )
 names(joined_list_meta_all_data)
 
 dir.create("full_meta_results")
 
-for (i in 1:6) {
+for (i in 1:length(joined_list_meta_all_data)) {
   
   path_to_save = paste0("full_meta_results/",names_for_list[i], ".csv")
   
@@ -6295,128 +6299,6 @@ mean(b-a)
 a = c(58.85, 45.35, 42.44)
 b = c(46.55, 54.55, 57.14)
 mean(b-a)
-
-################### Comparison with genetic background ###################
-# https://pmc.ncbi.nlm.nih.gov/articles/PMC10603363/#SD3
-gwas_SMR_sumary = openxlsx::read.xlsx("suicide_GWAS/NIHMS1937255-supplement-Supplementary_Tables.xlsx", sheet = "S17", startRow = 3)
-gwas_SMR_sumary = gwas_SMR_sumary[!is.na(gwas_SMR_sumary$Probe.ID),]
-gwas_magma_summary = openxlsx::read.xlsx("suicide_GWAS/NIHMS1937255-supplement-Supplementary_Tables.xlsx", sheet = "S13", startRow = 2)
-
-
-# Gene harmonization
-harmoniz_genes_SMR = check_gene_symbol_NIH(PRF_gene_symbols = gwas_SMR_sumary$Gene, 
-                                             PRF_ref_NIH_expanded = Homo_Sapiens_Gene_info_NIH_expanded,
-                                             PRF_replace_NA_with_old = TRUE)
-harmoniz_genes_SMR_dict = harmoniz_genes_SMR$Suggested.Symbol
-names(harmoniz_genes_SMR_dict) = harmoniz_genes_SMR$x
-harmoniz_genes_gm = check_gene_symbol_NIH(PRF_gene_symbols = gwas_magma_summary$SYMBOL, 
-                                           PRF_ref_NIH_expanded = Homo_Sapiens_Gene_info_NIH_expanded,
-                                           PRF_replace_NA_with_old = TRUE)
-harmoniz_genes_gm_dict = harmoniz_genes_gm$Suggested.Symbol
-names(harmoniz_genes_gm_dict) = harmoniz_genes_gm$x
-gwas_SMR_sumary$harmon_symbol = sapply(gwas_SMR_sumary$Gene, function(x) harmoniz_genes_SMR_dict[x])
-gwas_magma_summary$harmon_symbol = sapply(gwas_magma_summary$SYMBOL, function(x) harmoniz_genes_gm_dict[x])
-
-#### Comparison wirh RE meta-analysis
-meta_list_signif_combined = list(
-  "meta_no_covar_all_brain_signif" = meta_no_covar_all_brain_signif,
-  "meta_no_covar_cortical_signif" = meta_no_covar_cortical_signif,
-  "meta_no_covar_prefrontal_signif" = meta_no_covar_prefrontal_signif,
-  "meta_with_covar_all_brain_signif" = meta_with_covar_all_brain_signif,
-  "meta_with_covar_cortical_signif" = meta_with_covar_cortical_signif,
-  "meta_with_covar_prefrontal_signif" = meta_with_covar_prefrontal_signif,
-  "meta_SV_all_brain_signif" = meta_SV_all_brain_signif,
-  "meta_SV_cortical_signif" = meta_SV_cortical_signif,
-  "meta_SV_prefrontal_signif" = meta_SV_prefrontal_signif
-)
-
-signif_genes_any_RE = lapply(meta_list_signif_combined, function(x){
-  x = x[abs(x$meta_LFc) >= 0.2,]
-  genes = x$gene
-  return(genes)
-})
-signif_genes_any_RE = unlist(signif_genes_any_RE)
-signif_genes_any_RE = unique(signif_genes_any_RE)
-
-SMR_GWAS_filtered_results = lapply(meta_list_signif_combined, function(x){
-  x = x[x$Gene %in% gwas_SMR_sumary$harmon_symbol,]
-  return(x)
-})
-magma_GWAS_filtered_results = lapply(meta_list_signif_combined, function(x){
-  x = x[x$Gene %in% gwas_magma_summary$harmon_symbol,]
-  return(x)
-})
-# No matching anywhere
-
-#### Comparison with RRA meta-analysis
-meta_list_signif_combined_RRA = list(
-  "meta_no_covar_all_brain_signif_RRA" = meta_no_covar_all_brain,
-  "meta_no_covar_cortical_signif_RRA" = meta_no_covar_cortical,
-  "meta_no_covar_prefrontal_signif_RRA" = meta_no_covar_prefrontal,
-  "meta_with_covar_all_brain_signif_RRA" = meta_with_covar_all_brain,
-  "meta_with_covar_cortical_signif_RRA" = meta_with_covar_cortical,
-  "meta_with_covar_prefrontal_signif_RRA" = meta_with_covar_prefrontal,
-  "meta_SV_all_brain_signif_RRA" = meta_SV_all_brain,
-  "meta_SV_cortical_signif_RRA" = meta_SV_cortical,
-  "meta_SV_prefrontal_signif_RRA" = meta_SV_prefrontal
-)
-meta_list_signif_combined_RRA = lapply(meta_list_signif_combined_RRA, function(x){
-  x = x %>%
-    filter(., P_RRA < 0.05) %>%
-    arrange(., P_RRA)
-  return(x)
-})
-
-signif_genes_any_RRA = lapply(meta_list_signif_combined_RRA, function(x){
-  x = x[!is.na(x$meta_LFc), ]
-  x = x[abs(x$meta_LFc) >= 0.2,]
-  genes = x$gene
-  return(genes)
-})
-signif_genes_any_RRA = unlist(signif_genes_any_RRA)
-signif_genes_any_RRA = unique(signif_genes_any_RRA)
-
-SMR_GWAS_filtered_result_RRA  = lapply(meta_list_signif_combined_RRA, function(x){
-  x = x[x$Gene %in% gwas_SMR_sumary$harmon_symbol,]
-  return(x)
-})
-magma_GWAS_filtered_results_RRA = lapply(meta_list_signif_combined_RRA, function(x){
-  x = x[x$Gene %in% gwas_magma_summary$harmon_symbol,]
-  return(x)
-})
-# No matching anywhere
-
-
-################### Integration with eQTL and GWAS Catalog ###################
-eQTL_files = list.files(path = "GTEx_Analysis_v10_eQTL_updated", full.names = TRUE)
-eQTL_files = eQTL_files[stri_detect_fixed(eQTL_files, pattern = "Brain")]
-eQTL_files = eQTL_files[stri_detect_fixed(eQTL_files, pattern = "eGenes")]
-eQTL_files = eQTL_files[!stri_detect_fixed(eQTL_files, pattern = "Spinal_cord")]
-
-eQTL_df = lapply(eQTL_files, function(x){
-  tissue_name = stri_replace_all_fixed(x, pattern = "GTEx_Analysis_v10_eQTL_updated/Brain_", replacement = "")
-  tissue_name = unlist(stri_split_fixed(tissue_name, pattern = "."))
-  tissue_name = tissue_name[1]
-  dataset_qtl = smart_fread(x)
-  dataset_qtl$tissue = tissue_name
-  return(dataset_qtl)
-})
-eQTL_df = do.call(rbind, eQTL_df)
-eQTL_df = eQTL_df[eQTL_df$qval<0.05,]
-
-eQTL_df_genes = unique(eQTL_df$gene_name)
-
-# Symbol harmonization
-harmoniz_genes_eQTL = check_gene_symbol_NIH(PRF_gene_symbols = eQTL_df_genes, 
-                                           PRF_ref_NIH_expanded = Homo_Sapiens_Gene_info_NIH_expanded,
-                                           PRF_replace_NA_with_old = TRUE)
-harmoniz_genes_eQTL_dict = harmoniz_genes_eQTL$Suggested.Symbol
-names(harmoniz_genes_eQTL_dict) = harmoniz_genes_eQTL$x
-
-eQTL_df$harmon_symbol = sapply(eQTL_df$gene_name, function(x) harmoniz_genes_eQTL_dict[x])
-
-eQTL_df_filtered_RE_genes = eQTL_df[eQTL_df$harmon_symbol %in% signif_genes_any_RE,]
-eQTL_df_filtered_RRA_genes = eQTL_df[eQTL_df$harmon_symbol %in% signif_genes_any_RRA,]
 
 
 
