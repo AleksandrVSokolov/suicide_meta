@@ -2401,7 +2401,7 @@ plot_gene_helper = function(gene_name, reduced_lists, subset){
 plot_gene_helper("CHPF2", stacked_reduced_lists, "Neuronal")
 
 ### Add significance of normal meta-analyses
-file_path = "Meta_suicide_significant_genes_last.xlsx"
+file_path = "Meta_suicide_significant_genes.xlsx"
 sheet_names = getSheetNames(file_path)
 last_meta_results = lapply(sheet_names, function(x){
   file = openxlsx::read.xlsx(file_path, sheet = x)

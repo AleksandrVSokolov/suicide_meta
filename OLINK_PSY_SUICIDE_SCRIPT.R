@@ -2052,7 +2052,26 @@ gene_names_with_covar = lapply(data_list_with_covar, function(x){
 gene_names_with_covar = unlist(gene_names_with_covar)
 gene_names_with_covar = unique(gene_names_with_covar)
 
-gene_names_full = c(gene_names_no_covar, gene_names_with_covar)
+gene_names_from_sv = lapply(data_list_SV, function(x){
+  
+  gene_symbols = x$Gene_symbol
+  gene_symbols_non_HGNC = x$Gene_symbol_non_hgnc
+  
+  gene_symbols_all = c(gene_symbols, gene_symbols_non_HGNC)
+  gene_symbols_all = unlist(gene_symbols_all)
+  gene_symbols_all = unique(gene_symbols_all)
+  gene_symbols_all = unlist(stri_split_fixed(gene_symbols_all, pattern = ";"))
+  gene_symbols_all = gene_symbols_all[!is.na(gene_symbols_all)]
+  gene_symbols_all = gene_symbols_all[gene_symbols_all != ""]
+  gene_symbols_all = gene_symbols_all[gene_symbols_all != " "]
+  gene_symbols_all = gene_symbols_all[gene_symbols_all != "NA"]
+  
+  return(gene_symbols_all)
+})
+gene_names_from_sv = unlist(gene_names_from_sv)
+gene_names_from_sv = unique(gene_names_from_sv)
+
+gene_names_full = c(gene_names_no_covar, gene_names_with_covar, gene_names_from_sv)
 gene_names_full = unique(gene_names_full)
 harmoniz_genes_check = check_gene_symbol_NIH(PRF_gene_symbols = gene_names_full, 
                                              PRF_ref_NIH_expanded = Homo_Sapiens_Gene_info_NIH_expanded,
@@ -2640,6 +2659,9 @@ run_meta_SJ = function(initial_study_list, blood_df_to_compare){
   initial_study_list_reduced = do.call(rbind, initial_study_list_reduced)
   unique_genes_meta = unique(initial_study_list_reduced$Corrected_symbol)
   
+  print("Total genes: ")
+  print(length(unique_genes_meta))
+  
   print("Running meta-analysis per gene")
   
   meta_analysis_list = mclapply(unique_genes_meta, function(x){
@@ -3030,7 +3052,7 @@ combined_df_no_covar_meta_full_list_reduced = analysis_container_no_covar_all_br
 
 meta_no_covar_all_brain = add_RRA_to_meta_df(meta_no_covar_all_brain, combined_df_no_covar_meta_full_list)
 non_na_substet = meta_no_covar_all_brain[!is.na(meta_no_covar_all_brain$meta_LFc), ]
-cor.test(non_na_substet$meta_pval, non_na_substet$P_RRA, method = "spearman") # 0.1437391
+cor.test(non_na_substet$meta_pval, non_na_substet$P_RRA, method = "spearman") # 0.1461325
 meta_no_covar_all_brain_signif = meta_no_covar_all_brain[meta_no_covar_all_brain$meta_pval < 0.05,]
 meta_no_covar_all_brain_signif = meta_no_covar_all_brain_signif[!is.na(meta_no_covar_all_brain_signif$meta_pval),]
 
@@ -3063,17 +3085,17 @@ for (i in 1:nrow(meta_no_covar_all_brain_signif)){
   
 }
 
-# Heterogeneity summary (26379 were excluded from meta due to Ncohorts <5)
+# Heterogeneity summary (28644 were excluded from meta due to Ncohorts <5)
 summary(meta_no_covar_all_brain$I2)
 "
    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-  0.059  34.557  49.220  48.821  63.580  98.581   26379 
+  0.059  34.431  49.216  48.750  63.528  98.581   28644 
 "
 
 summary(meta_no_covar_all_brain_signif$I2)
 "
    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
- 0.8334 19.9231 32.8597 33.5858 44.8367 78.5286 
+ 0.8334 20.4189 32.9392 34.0485 45.3801 78.5286
 "
 
 ################### Meta (with covar) all brain data ###################
@@ -3236,16 +3258,16 @@ for (i in 1:nrow(meta_no_covar_cortical_signif)){
   
 }
 
-# Heterogeneity summary (29267 were excluded from meta due to Ncohorts <5)
+# Heterogeneity summary (31325 were excluded from meta due to Ncohorts <5)
 summary(meta_no_covar_cortical$I2)
 "
-  Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-  0.021  32.502  49.491  48.890  65.609  98.987   29267 
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+  0.021  31.841  48.919  48.347  65.182  98.987   31325 
 "
 summary(meta_no_covar_cortical_signif$I2)
 "
    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-  1.255  22.138  34.394  35.558  48.708  83.960 
+  1.215  22.009  34.357  35.388  48.552  83.960 
 "
 
 ################### Meta cortical regions (with covar) ###################
@@ -3392,17 +3414,17 @@ for (i in 1:nrow(meta_no_covar_prefrontal_signif)){
   
 }
 
-# Heterogeneity summary (30411 were excluded from meta due to Ncohorts <5)
+# Heterogeneity summary (33247 were excluded from meta due to Ncohorts <5)
 summary(meta_no_covar_prefrontal$I2)
 "
    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-  0.001  30.325  48.094  47.969  65.907  99.223   30411 
+   0.00   30.27   48.05   47.93   65.83   99.22   33247 
 "
 
 summary(meta_no_covar_prefrontal_signif$I2)
 "
    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-   0.28   21.40   35.21   37.34   50.59   90.73 
+   0.28   21.44   35.29   37.44   50.67   90.73 
 "
 
 ################### Meta prefrontal regions (with covar) ###################
@@ -3632,7 +3654,7 @@ nrow(REML_meta_no_covar_all_brain_signif)
 summary(REML_meta_no_covar_all_brain$I2)
 "
    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-   0.00    0.00   13.98   21.40   39.84   94.73   26379 
+   0.00    0.00   12.71   20.95   39.31   94.73   28644 
 "
 
 ################### REML Meta (with covar) all brain data ###################
@@ -3725,8 +3747,8 @@ nrow(REML_meta_no_covar_cortical_signif)
 # Heterogeneity
 summary(REML_meta_no_covar_cortical$I2)
 "
-  Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-   0.00    0.00   13.79   22.98   43.19   95.93   29267 
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+   0.00    0.00   12.86   22.62   42.70   95.93   31325 
 "
 
 ################### REML Meta cortical regions (with covar) ###################
@@ -3823,8 +3845,8 @@ nrow(REML_meta_no_covar_prefrontal_signif)
 # Heterogeneity
 summary(REML_meta_no_covar_prefrontal$I2)
 "
-   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
-   0.00    0.00   14.80   24.23   45.79   97.75   30411 
+  Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+   0.00    0.00   14.48   24.13   45.66   97.75   33247 
 "
 
 
@@ -4579,15 +4601,15 @@ MODERATED_analysis_cortical_SV = MODERATED_analysis_cortical_SV[[1]]
 # Cortical correlations
 cor.test(MODERATED_analysis_cortical_no_covar$beta_Percent_BD, 
          MODERATED_analysis_cortical_no_covar$beta_Percent_Depr,
-         method = "spearman") # 0.8973387; p-value < 2.2e-16
+         method = "spearman") # 0.8972178; p-value < 2.2e-16
 
 cor.test(MODERATED_analysis_cortical_no_covar$pval_Percent_BD, 
          MODERATED_analysis_cortical_no_covar$pval_Percent_Depr,
-         method = "spearman") # 0.759319; p-value < 2.2e-16
+         method = "spearman") # 0.7594179; p-value < 2.2e-16
 
 cor.test(MODERATED_analysis_cortical_no_covar$pval_Percent_BD, 
          MODERATED_analysis_cortical_no_covar$pval_Percent_SCZ,
-         method = "spearman") # 0.92253; p-value < 2.2e-16
+         method = "spearman") # 0.9225474; p-value < 2.2e-16
 
 cor.test(MODERATED_analysis_cortical_with_covar$pval_Percent_BD, 
          MODERATED_analysis_cortical_with_covar$pval_Percent_Depr,
@@ -4604,15 +4626,15 @@ cor.test(MODERATED_analysis_cortical_SV$pval_Percent_BD,
 # All brain correlations
 cor.test(MODERATED_analysis_all_brain_no_covar$beta_Percent_BD, 
          MODERATED_analysis_all_brain_no_covar$beta_Percent_Depr,
-         method = "spearman") # 0.6970274 ; p-value < 2.2e-16
+         method = "spearman") # 0.6962317 ; p-value < 2.2e-16
 
 cor.test(MODERATED_analysis_all_brain_no_covar$pval_Percent_BD, 
          MODERATED_analysis_all_brain_no_covar$pval_Percent_Depr,
-         method = "spearman") # 0.6737465 ; p-value < 2.2e-16
+         method = "spearman") # 0.6735521 ; p-value < 2.2e-16
 
 cor.test(MODERATED_analysis_all_brain_no_covar$pval_Percent_BD, 
          MODERATED_analysis_all_brain_no_covar$pval_Percent_SCZ,
-         method = "spearman") # 0.6448073; p-value < 2.2e-16
+         method = "spearman") # 0.6448914; p-value < 2.2e-16
 
 cor.test(MODERATED_analysis_all_brain_with_covar$pval_Percent_BD, 
          MODERATED_analysis_all_brain_with_covar$pval_Percent_Depr,
@@ -4979,6 +5001,13 @@ meta_analysis_lists = meta_analysis_lists[!stri_detect_regex(meta_analysis_lists
 meta_analysis_lists = meta_analysis_lists[!stri_detect_regex(meta_analysis_lists, pattern = "REML")]
 
 meta_analysis_lists_datasets = lapply(meta_analysis_lists, function(x) get(x))
+
+sapply(meta_analysis_lists_datasets, function(x){
+  x = x[!is.na(x$meta_LFc), ]
+  rows = nrow(x)
+  return(rows)
+})
+
 names_for_list = c(
   "Meta all brain (no covar.)",
   "Meta all brain (SVs)",
@@ -5008,6 +5037,9 @@ plot_meta_correlation = function(meta_df_1,
   # Arrange
   meta_df_1 = dplyr::arrange(meta_df_1, gene)
   meta_df_2 = dplyr::arrange(meta_df_2, gene)
+  
+  # Check gene match
+  print(all(meta_df_1$gene == meta_df_2$gene))
   
   tmp_df = cbind(meta_df_1$meta_LFc, meta_df_2$meta_LFc)
   colnames(tmp_df) = c("lFC_1", "lFC_2")
@@ -5190,33 +5222,106 @@ png(filename = combined_file_name, units = "px", width = width*3, height = heigh
 grid.arrange(grobs = image_grobs[1:3], ncol = 3)
 dev.off()
 
-################### Comparison of meta-genes ###################
+
+################### Extended Comparison of Meta-genes ###################
+
 analysis_pairs = list(
-  c("meta_no_covar_all_brain_signif", "meta_with_covar_all_brain_signif"),
-  c("meta_no_covar_cortical_signif", "meta_with_covar_cortical_signif"),
-  c("meta_no_covar_prefrontal_signif", "meta_with_covar_prefrontal_signif"),
-  c("meta_no_covar_all_brain_signif", "meta_SV_all_brain_signif"),
-  c("meta_no_covar_cortical_signif", "meta_SV_cortical_signif"),
-  c("meta_no_covar_prefrontal_signif", "meta_SV_prefrontal_signif"),
-  c("meta_with_covar_all_brain_signif", "meta_SV_all_brain_signif"),
-  c("meta_with_covar_cortical_signif", "meta_SV_cortical_signif"),
-  c("meta_with_covar_prefrontal_signif", "meta_SV_prefrontal_signif")
+  c("meta_no_covar_all_brain", "meta_with_covar_all_brain"),
+  c("meta_no_covar_cortical", "meta_with_covar_cortical"),
+  c("meta_no_covar_prefrontal", "meta_with_covar_prefrontal"),
+  c("meta_no_covar_all_brain", "meta_SV_all_brain"),
+  c("meta_no_covar_cortical", "meta_SV_cortical"),
+  c("meta_no_covar_prefrontal", "meta_SV_prefrontal"),
+  c("meta_with_covar_all_brain", "meta_SV_all_brain"),
+  c("meta_with_covar_cortical", "meta_SV_cortical"),
+  c("meta_with_covar_prefrontal", "meta_SV_prefrontal")
 )
 
 compare_analyses_results = function(pair){
   
-  dat1 =  get(pair[1])
-  dat2 =  get(pair[2])
+  data_full_1 =  get(pair[1])
+  data_full_2 =  get(pair[2])
+  
+  # Remove rows without estimated log2FC
+  data_full_1 = data_full_1[!is.na(data_full_1$meta_LFc),]
+  data_full_2 = data_full_2[!is.na(data_full_2$meta_LFc),]
   
   name1 = rename_function(pair[1])
   name2 = rename_function(pair[2])
   
   Data_name = paste0("######### Summary of comparison ", name1, " VS ",  name2," #########")
   
+  overlapping_genes_meta_all_included = intersect(data_full_1$gene, data_full_2$gene)
+  overlapping_genes_meta_all_included = unique(overlapping_genes_meta_all_included) 
+  n_genes_overlap_all_included = length(overlapping_genes_meta_all_included)
+  n_genes_overlap_all_included = paste0("Total number of shared analyzed genes in both strategies: ", n_genes_overlap_all_included)
+  
+  overlapping_subset_all_inc_1 = data_full_1[data_full_1$gene %in% overlapping_genes_meta_all_included, ]
+  overlapping_subset_all_inc_1 = dplyr::arrange(overlapping_subset_all_inc_1, gene)
+  overlapping_subset_all_inc_2 = data_full_2[data_full_2$gene %in% overlapping_genes_meta_all_included, ]
+  overlapping_subset_all_inc_2 = dplyr::arrange(overlapping_subset_all_inc_2, gene)
+  
+  overlapping_subset_all_inc_stat = cbind(
+    overlapping_subset_all_inc_1$gene,
+    overlapping_subset_all_inc_1$meta_LFc,
+    overlapping_subset_all_inc_2$gene,
+    overlapping_subset_all_inc_2$meta_LFc
+  )
+  
+  overlapping_subset_all_inc_stat = as.data.frame(overlapping_subset_all_inc_stat)
+  overlapping_subset_all_inc_stat$V2 = as.numeric(overlapping_subset_all_inc_stat$V2)
+  overlapping_subset_all_inc_stat$V4 = as.numeric(overlapping_subset_all_inc_stat$V4)
+  overlapping_subset_all_inc_stat$mean = mapply(function(x,y) mean(x,y),overlapping_subset_all_inc_stat$V2, overlapping_subset_all_inc_stat$V4)
+  overlapping_subset_all_inc_stat$dir_match = mapply(function(x,y){
+    if (x<0 & y<0){
+      return(TRUE)
+    }
+    if (x>0 & y>0){
+      return(TRUE)
+    }
+    return(FALSE)
+    
+  },overlapping_subset_all_inc_stat$V2, overlapping_subset_all_inc_stat$V4)
+  
+  # Correlations
+  cor_spearman = cor.test(overlapping_subset_all_inc_stat$V2, overlapping_subset_all_inc_stat$V4, method = "spearman")$estimate
+  cor_pearson = cor.test(overlapping_subset_all_inc_stat$V2, overlapping_subset_all_inc_stat$V4, method = "pearson")$estimate
+  cor_spearman = round(cor_spearman, digits = 2)
+  cor_pearson = round(cor_pearson, digits = 2)
+  
+  cor_spearman = paste0("Spearman correlation of all log2FC: ", cor_spearman)
+  cor_pearson = paste0("Pearson correlation of all log2FC: ", cor_pearson)
+  
+  
+  percent_match_all_inc = table(overlapping_subset_all_inc_stat$dir_match)
+  percent_match_all_inc = percent_match_all_inc["TRUE"]/sum(percent_match_all_inc)
+  percent_match_all_inc = percent_match_all_inc * 100
+  percent_match_all_inc = round(percent_match_all_inc, digits=2)
+  percent_match_all_inc = paste0("Percent of genes with matching direction (All analyzed): ", percent_match_all_inc, "%")
+  
+  n_genes_overla_up_all_inc = overlapping_subset_all_inc_stat %>%
+    filter(., dir_match, mean>0) %>%
+    pull(V1) %>%
+    length() %>%
+    paste0("N genes with direction match and log2FC>0 (All analyzed): ", .)
+  
+  n_genes_overla_down_all_inc = overlapping_subset_all_inc_stat %>%
+    filter(., dir_match, mean<0) %>%
+    pull(V1) %>%
+    length() %>%
+    paste0("N genes with direction match and log2FC<0 (All analyzed): ", .)
+  
+  
+  # Compatibility
+  dat1 =  data_full_1[data_full_1$meta_pval < 0.05,]
+  dat2 =  data_full_2[data_full_2$meta_pval < 0.05,]
+  dat1 =  dat1[!is.na(dat1$meta_pval),]
+  dat2 =  dat2[!is.na(dat2$meta_pval),]
+  
   overlapping_genes_meta_full = intersect(dat1$gene, dat2$gene)
   overlapping_genes_meta_full = unique(overlapping_genes_meta_full) 
   n_genes_overlap = length(overlapping_genes_meta_full)
-  n_genes_overlap = paste0("Total number of overlapping genes p<0.05: ", n_genes_overlap)
+  n_genes_overlap = paste0("Total number of overlapping genes (p<0.05): ", n_genes_overlap)
   
   overlapping_subset_dat1 = dat1[dat1$gene %in% overlapping_genes_meta_full, ]
   overlapping_subset_dat1 = dplyr::arrange(overlapping_subset_dat1, gene)
@@ -5276,6 +5381,18 @@ compare_analyses_results = function(pair){
   separator_small = "\n"
   separator_large = "\n\n\n\n"
   output = c(Data_name, 
+             separator_small,
+             n_genes_overlap_all_included,
+             separator_small,
+             cor_spearman,
+             separator_small,
+             cor_pearson,
+             separator_small,
+             percent_match_all_inc,
+             separator_small,
+             n_genes_overla_up_all_inc,
+             separator_small,
+             n_genes_overla_down_all_inc,
              separator_small,
              n_genes_overlap,
              separator_small,
@@ -5672,7 +5789,7 @@ blood_cor_plot = ggplot(data = meta_no_covar_all_brain, aes(x = meta_LFc, y = me
   )
 
 ggsave(file = "Fig_S2.png", plot = blood_cor_plot, width=2560, height=1440, units = "px", scale = 1)
-nrow(meta_no_covar_all_brain) - 32651 # 15717 transcripts plotted
+nrow(meta_no_covar_all_brain) - 35219 # 15859 transcripts plotted
 
 ################### RRA and Random effects stats ###################
 meta_list_RRA_stats_combined = list(
@@ -5953,7 +6070,10 @@ visSave(net, file = "Meta_net.html")
 Sys.setenv("OPENSSL_CONF"="/dev/null")
 webshot("Meta_net.html", "Meta_net_2.png", vwidth = 2000, vheight = 2000, zoom = 1, delay = 10)
 
-
+# Stats on graph
+combined_graph_df_stats_base = table(combined_graph_df$Target)
+combined_graph_df_stats_base = as.data.frame(combined_graph_df_stats_base)
+combined_graph_df_stats_base = dplyr::arrange(combined_graph_df_stats_base, -Freq)
 
 ################### RRA-RE Network visualization for meta ###################
 joined_list = c(meta_list_no_covar_signif, meta_list_with_covar_signif, meta_list_SV_signif)
@@ -6046,6 +6166,11 @@ net = visNetwork(nodes = network_data$nodes, edges = network_data$edges, height 
 visSave(net, file = "Meta_net_RRA_RE.html")
 Sys.setenv("OPENSSL_CONF"="/dev/null")
 webshot("Meta_net_RRA_RE.html", "Meta_net_RRA_RE.png", vwidth = 2000, vheight = 2000, zoom = 1, delay = 10)
+
+# Stats on graph
+combined_graph_df_stats = table(combined_graph_df$Target)
+combined_graph_df_stats = as.data.frame(combined_graph_df_stats)
+combined_graph_df_stats = dplyr::arrange(combined_graph_df_stats, -Freq)
 
 ################### Enrichment analysis ###################
 # Preparing Entrez dataset
@@ -6175,6 +6300,10 @@ unique_significant_genes = lapply(joined_list_significant_high_LFc, function(x){
 })
 unique_significant_genes = unlist(unique_significant_genes)
 unique_significant_genes = unique(unique_significant_genes)
+
+old_unique_genes = read.csv("OLD/GPT_5_classified_symbols__fixed.csv")
+unique_significant_genes[unique_significant_genes %!in% old_unique_genes$gene_symbol]
+
 writeLines(unique_significant_genes, "unique_significant_genes_for_AI.txt")
 gpt_classified_genes = read.csv("GPT_5_classified_symbols__fixed.csv")
 
@@ -6292,12 +6421,8 @@ plot_forest_meta_gene(gene_name = "VEGFA", meta_df = combined_df_with_covar_meta
 
 
 ################### Mini stats ###################
-a = c(58.85, 45.35, 42.44)
-b = c(69.11, 52.8, 59.48)
-mean(b-a)
-
-a = c(58.85, 45.35, 42.44)
-b = c(46.55, 54.55, 57.14)
+a = c(49.2, 48.9, 48)
+b = c(12.7, 12.8, 14.5)
 mean(b-a)
 
 

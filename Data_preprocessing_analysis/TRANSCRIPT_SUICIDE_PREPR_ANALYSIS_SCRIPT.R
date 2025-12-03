@@ -698,10 +698,10 @@ GSE208338_probes_gene_symbols = mclapply(GSE208338_probes_ids, function(x){
 GSE208338_probes$Gene_symbol = sapply(GSE208338_probes_gene_symbols, function(x){
   return(x[1])
 })
-
 GSE208338_probes$Gene_symbol_non_hgnc = sapply(GSE208338_probes_gene_symbols, function(x){
   return(x[2])
 })
+
 
 # Row match check
 all(rownames(expression_GSE208338) == GSE208338_probes$ID) # TRUE
@@ -744,6 +744,10 @@ GSE208338_expression = smart_fread("GSE208338_results/GSE208338_expression.csv")
 GSE208338_probes = smart_fread("GSE208338_results/GSE208338_probes.csv")
 GSE208338_pheno_curated = smart_fread("GSE208338_results/GSE208338_pheno_curated.csv")
 
+# check
+all(rownames(GSE208338_expression) %in% GSE208338_probes$ID) # TRUE
+all(rownames(GSE208338_probes) %in% rownames(GSE208338_expression)) # TRUE
+
 GSE208338_probes = GSE208338_probes[rownames(GSE208338_expression),]
 all(rownames(GSE208338_expression) == rownames(GSE208338_probes)) # TRUE
 all(colnames(GSE208338_expression) == GSE208338_pheno_curated$GEO_ACCESSION) # TRUE
@@ -766,7 +770,7 @@ GSE208338_Top_table_no_covar$SE = SE
 # Annotating results
 GSE208338_probes = GSE208338_probes[GSE208338_Top_table_no_covar$ID, ]
 GSE208338_Top_table_no_covar$Gene_symbol = GSE208338_probes$Gene_symbol
-GSE208338_Top_table_no_covar$Gene_symbol_non_hgnc = GSE208338_Top_table_no_covar$Gene_symbol_non_hgnc
+GSE208338_Top_table_no_covar$Gene_symbol_non_hgnc = GSE208338_probes$Gene_symbol_non_hgnc
 GSE208338_Top_table_no_covar$Tissue = GSE208338_pheno_curated$TISSUE[1]
 GSE208338_Top_table_no_covar$Tissue_type = "Brain"
 GSE208338_Top_table_no_covar$Technology = "Array"
@@ -1085,7 +1089,7 @@ GSE5388_Top_table_SV$SE = SE
 # Annotating results
 GSE5388_probes = GSE5388_probes[GSE5388_Top_table_SV$ID, ]
 GSE5388_Top_table_SV$Gene_symbol = GSE5388_probes$Gene_symbol
-GSE5388_Top_table_SV$Gene_symbol_non_hgnc = GSE5388_probes$Gene_symbol_non_hgnc
+# GSE5388_Top_table_SV$Gene_symbol_non_hgnc = GSE5388_probes$Gene_symbol_non_hgnc
 GSE5388_Top_table_SV$Tissue = GSE5388_pheno_curated$TISSUE[1]
 GSE5388_Top_table_SV$Tissue_type = "Brain"
 GSE5388_Top_table_SV$Technology = "Array"
@@ -1327,7 +1331,7 @@ GSE5389_Top_table_SV$SE = SE
 # Annotating results
 GSE5389_probes = GSE5389_probes[GSE5389_Top_table_SV$ID, ]
 GSE5389_Top_table_SV$Gene_symbol = GSE5389_probes$Gene_symbol
-GSE5389_Top_table_SV$Gene_symbol_non_hgnc = GSE5389_probes$Gene_symbol_non_hgnc
+#GSE5389_Top_table_SV$Gene_symbol_non_hgnc = GSE5389_probes$Gene_symbol_non_hgnc
 GSE5389_Top_table_SV$Tissue = GSE5389_pheno_curated$TISSUE[1]
 GSE5389_Top_table_SV$Tissue_type = "Brain"
 GSE5389_Top_table_SV$Technology = "Array"
